@@ -123,8 +123,13 @@ elif args.pretrained == "local":
             model_torch.load_state_dict(checkpoint['model_state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
+# print pytorch model
+print("PyTorch model:")
+print(model_torch, flush=True)
+
 model_torch.eval()
 print(model_torch.config)
+
 
 # Initialize NNTile and StarPU
 time0 = time.time()
