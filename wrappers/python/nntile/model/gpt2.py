@@ -590,6 +590,11 @@ class GPT2Model(BaseModel, LLMGenerationMixin):
             use_cache: bool = False,
             kv_caches: Optional[List[KVCache]] = None
         ):
+
+        print_ten = lambda s, t: print(s, t.value.shape, t.value.basetile_shape)
+
+        print_ten("INPUT:", x)
+
         inp_emb, pos_emb, add_l = self.layers[0:3]
         seq_size = x.value.shape[0]
 
@@ -608,8 +613,11 @@ class GPT2Model(BaseModel, LLMGenerationMixin):
         )
 
         outs_inp = inp_emb.forward_dynamic(x)
+        print_ten("Post-emb1:", outs_inp)
         outs_pos = pos_emb.forward_dynamic(pos_ids_nnt_tm)
+        print_ten("Post-emb2:", outs_pos)
         embedded_input = add_l.forward_dynamic(outs_inp, outs_pos)
+        print_ten("Embedded-input:", embedded_input)
 
         layers_in_block = 8
         blocks_start = 3
@@ -618,6 +626,8 @@ class GPT2Model(BaseModel, LLMGenerationMixin):
             kv_caches = [
                 KVCache(self.seq_len, 1) for _ in range(self.num_hidden_layers)
             ]
+
+        print("-- GPT BLOCKS --")
 
         for hidden_id in range(self.num_hidden_layers):
             # dispatch block
@@ -633,24 +643,35 @@ class GPT2Model(BaseModel, LLMGenerationMixin):
             mlp_block = cur_block_layers[4:7]
             add2 = cur_block_layers[7]
 
+            print_ten("Block input:", gpt_block_inout)
             x_tmp = layer_norm1.forward_dynamic(gpt_block_inout)
+            print_ten("Post-norm1:", gpt_block_inout)
             x_tmp1, updated_cache = attn.forward_dynamic(
                 x_tmp, kv_cache=kv_caches[hidden_id] if kv_caches else None
             )
+            print_ten("x_tmp1:", x_tmp1)
             if kv_caches:
                 kv_caches[hidden_id] = updated_cache
 
             x_tmp2 = add1.forward_dynamic(gpt_block_inout, x_tmp1)
+            print_ten("x_tmp2:", x_tmp2)
             x_tmp3 = layer_norm2.forward_dynamic(x_tmp2)
+            print_ten("x_tmp3:", x_tmp3)
             mlp_output = x_tmp3
             for layer in mlp_block:
                 mlp_output = layer.forward_dynamic(mlp_output)
+                print_ten("MLP-out:", mlp_output)
             gpt_block_inout = add2.forward_dynamic(x_tmp2, mlp_output)
+            print_ten("Block output:", gpt_block_inout)
+
+        print("-- END GPT BLOCKS --")
 
         last_ln, last_linear = self.layers[-2:]
 
         last_out = last_ln.forward_dynamic(gpt_block_inout)
+        print_ten("Last out:", last_out)
         last_out = last_linear.forward_dynamic(last_out)
+        print_ten("OUTPUT:", last_out)
         return last_out, kv_caches
 
     def unregister(self):
