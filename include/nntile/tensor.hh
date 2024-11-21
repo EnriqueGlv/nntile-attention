@@ -96,6 +96,9 @@
 #include <nntile/tensor/norm_fiber.hh>
 #include <nntile/tensor/log_scalar.hh>
 
+// Inria project
+#include "nntile/tensor/linear_relu.hh"
+
 //! @namespace nntile::tensor
 /*! This namespace holds high-level routines for Tensor<T>
  * */

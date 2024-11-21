@@ -1300,6 +1300,9 @@ void def_mod_tensor(py::module_ &m)
     m.def("log_scalar_fp32", &log_scalar<fp32_t>);
     m.def("log_scalar_fp32_fast_tf32", &log_scalar<fp32_fast_tf32_t>);
     m.def("log_scalar_bf16", &log_scalar<bf16_t>);
+
+    // Inria project
+    m.def("linear_relu_async_fp32", &linear_relu_fwd_async<fp32_t>);
 }
 
 // Main extension module with all wrappers

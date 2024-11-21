@@ -96,6 +96,9 @@
 #include <nntile/starpu/norm_fiber.hh>
 #include <nntile/starpu/log_scalar.hh>
 
+// Inria project
+#include "nntile/starpu/linear_relu.hh"
+
 //! @namespace nntile::starpu
 /*! This namespace holds StarPU wrappers
  * */

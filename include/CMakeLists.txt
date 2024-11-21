@@ -291,6 +291,8 @@ set(STARPU_HDR
     "nntile/starpu/rope.hh"
     "nntile/starpu/rope_backward.hh"
     "nntile/starpu/log_scalar.hh"
+    # inria project
+    "nntile/starpu/linear_relu.hh"
     )
 
 set(TILE_HDR
@@ -434,6 +436,8 @@ set(TENSOR_HDR
     "nntile/tensor/rope.hh"
     "nntile/tensor/log_scalar.hh"
     "nntile/tensor/rope_backward.hh"
+    # inria project
+    "nntile/tensor/linear_relu.hh"
     )
 
 set(LAYER_HDR

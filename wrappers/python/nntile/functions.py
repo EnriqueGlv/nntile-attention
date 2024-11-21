@@ -2011,3 +2011,26 @@ def log_scalar_async(name: str, value: Tensor) -> None:
         ops.log_scalar_async_bf16(name, value)
     else:
         raise TypeError('Wrong tensor type {type(value)}.')
+
+# Inria project
+def linear_relu_async(
+    alpha: float,
+    trans_A: TransOp,
+    A: Tensor,
+    trans_B: TransOp,
+    B: Tensor,
+    beta: float,
+    C: Tensor,
+    ndim: int,
+    batch_ndim: int,
+    redux: int = 0,
+) -> None:
+    """
+    Wrapper for fp32 fused gemm+relu
+    """
+    if type(A) is not type(B) or type(A) is not type(C):
+        raise TypeError
+    if type(A) is core_tensor.Tensor_fp32:
+        core_tensor.linear_relu_forward_async_fp32(alpha, trans_A, A, trans_B, B, beta, C, ndim, batch_ndim, redux)
+    else:
+        raise TypeError

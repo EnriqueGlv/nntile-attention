@@ -23,7 +23,7 @@ else()
         "kernel/add_slice_inplace/cpu.cc"
         "kernel/add_slice/cpu.cc"
         "kernel/add_fiber_inplace/cpu.cc"
-	"kernel/add_fiber/cpu.cc"
+	    "kernel/add_fiber/cpu.cc"
         "kernel/prod_slice/cpu.cc"
         "kernel/prod_fiber/cpu.cc"
         "kernel/prod_fiber3/cpu.cc"
@@ -234,6 +234,8 @@ set(STARPU_SRC
     "starpu/rope_backward.cc"
     "starpu/norm_fiber.cc"
     "starpu/log_scalar.cc"
+    # Inria project
+    "starpu/linear_relu.cc"
     )
 
 set(TILE_SRC
@@ -377,6 +379,8 @@ set(TENSOR_SRC
     "tensor/rope_backward.cc"
     "tensor/norm_fiber.cc"
     "tensor/log_scalar.cc"
+    # inria project
+    "tensor/linear_relu.cc"
     )
 
 set(LAYER_SRC
