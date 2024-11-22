@@ -31,8 +31,13 @@ x = nntile.tensor.Tensor_fp32(x_traits, x_distr, 0)
 x_grad = nntile.tensor.Tensor_fp32(x_traits, x_distr, 0)
 x_grad_required = False
 x_moments = nntile.tensor.TensorMoments(x, x_grad, x_grad_required)
+input_value = np.random.rand(n_cols,batch_size)
+x.value.from_array(input_value)
 print("Tensors initialized !")
 
-nntile.
+y = nntile.tensor.Tensor_fp32(x_traits, x_distr, 0)
+
+# TODO: better test
+z = linear_relu_async()
 
 nntile.starpu.wait_for_all()
