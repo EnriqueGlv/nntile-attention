@@ -2031,6 +2031,6 @@ def linear_relu_async(
     if type(A) is not type(B) or type(A) is not type(C):
         raise TypeError
     if type(A) is core_tensor.Tensor_fp32:
-        core_tensor.linear_relu_async_fp32(alpha, trans_A, A, trans_B, B, beta, C, ndim, batch_ndim, redux)
+        core_tensor.linear_relu_fwd_async_fp32(alpha, trans_A, A, trans_B, B, beta, C, ndim, batch_ndim, redux)
     else:
         raise TypeError

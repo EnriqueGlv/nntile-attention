@@ -182,7 +182,7 @@ Codelet codelet_NN_fp32,
 
 void init()
 {
-    codelet_NN_fp32.init("nntile_gemm_NN_fp32",
+    codelet_NN_fp32.init("nntile_lin_relu_NN_fp32",
             footprint,
 #ifdef NNTILE_USE_CBLAS
             {cpu<fp32_t>},
@@ -196,7 +196,7 @@ void init()
 #endif // NNTILE_USE_CUDA
             );
 
-    codelet_NT_fp32.init("nntile_gemm_NT_fp32",
+    codelet_NT_fp32.init("nntile_lin_relu_NT_fp32",
             footprint,
 #ifdef NNTILE_USE_CBLAS
             {cpu<fp32_t>},
@@ -210,7 +210,7 @@ void init()
 #endif // NNTILE_USE_CUDA
             );
 
-    codelet_TN_fp32.init("nntile_gemm_TN_fp32",
+    codelet_TN_fp32.init("nntile_lin_relu_TN_fp32",
             footprint,
 #ifdef NNTILE_USE_CBLAS
             {cpu<fp32_t>},
@@ -224,7 +224,7 @@ void init()
 #endif // NNTILE_USE_CUDA
             );
 
-    codelet_TT_fp32.init("nntile_gemm_TT_fp32",
+    codelet_TT_fp32.init("nntile_lin_relu_TT_fp32",
             footprint,
 #ifdef NNTILE_USE_CBLAS
             {cpu<fp32_t>},
@@ -338,7 +338,7 @@ void submit(const TransOp &transA, const TransOp &transB, Index m, Index n,
     // Check submission
     if(ret != 0)
     {
-        throw std::runtime_error("Error in gemm task submission");
+        throw std::runtime_error("Error in lin_relu task submission");
     }
 }
 

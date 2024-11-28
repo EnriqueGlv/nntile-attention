@@ -185,6 +185,8 @@ void init()
     rope::init();
     rope_backward::init();
     log_scalar::init();
+    // inria project
+    linRelu::init();
 }
 
 // Restrict StarPU codelets to certain computational units
@@ -267,6 +269,8 @@ void restrict_where(uint32_t where)
     rope::restrict_where(where);
     rope_backward::restrict_where(where);
     log_scalar::restrict_where(where);
+    // inria project
+    linRelu::restrict_where(where);
 }
 
 // Restore computational units for StarPU codelets
@@ -349,6 +353,8 @@ void restore_where()
     rope::restore_where();
     rope_backward::restore_where();
     log_scalar::restore_where();
+    // inria project
+    linRelu::restore_where();
 }
 
 } // namespace nntile::starpu
