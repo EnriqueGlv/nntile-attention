@@ -14,15 +14,21 @@
 
 #include "nntile/starpu/linear_relu.hh"
 
+
+
 // keep gemm kernel for cblas
 #ifndef STARPU_SIMGRID
 #   include "nntile/kernel/gemm.hh"
 #endif
 
+#ifdef NNTILE_USE_CUDA
+#include <cublasLt.h>
+#endif
+
 namespace nntile::starpu::linRelu
 {
 
-using namespace nntile::kernel::gemm;
+// using namespace nntile::kernel::gemm;
 
 #ifdef NNTILE_USE_CBLAS
 //! GEMM for contiguous matrices without padding through StarPU buffers
@@ -72,7 +78,7 @@ void cpu(void *buffers[], void *cl_args)
             C_offset = args->m * args->n;
     for(Index i = 0; i < args->batch; ++i)
     {
-        cblas(transA_, transB_, M, N, K, args->alpha, A, ldA, B, ldB,
+        nntile::kernel::gemm::cblas(transA_, transB_, M, N, K, args->alpha, A, ldA, B, ldB,
                 args->beta, C, ldC);
         A += A_offset;
         B += B_offset;
@@ -82,7 +88,7 @@ void cpu(void *buffers[], void *cl_args)
 }
 #endif // NNTILE_USE_CBLAS
 
-// #define NNTILE_USE_CUDA
+#define NNTILE_USE_CUDA
 #ifdef NNTILE_USE_CUDA
 //! GEMM for contiguous matrices without padding through StarPU buffers
 template<typename T>
@@ -127,19 +133,49 @@ void cuda(void *buffers[], void *cl_args)
             ldB = N;
     }
     // Get cuBLAS handle and CUDA stream
-    // cublasLtHandle_t handle = (cublasLtHandle_t)starpu_cublas_get_local_handle();
     cublasHandle_t handle = starpu_cublas_get_local_handle();
+    cublasLtHandle_t ltHandle = (cublasLtHandle_t)handle;
     cudaStream_t stream = starpu_cuda_get_local_stream();
     cublasSetStream(handle, stream);
     // alpha and beta parameters of GEMM operation are on CPU host
     cublasSetPointerMode(handle, CUBLAS_POINTER_MODE_HOST);
+
     // Call corresponding cuBLAS routine
+    // Create GEMM descriptor
+    cublasLtMatmulDesc_t matmulDesc;
+    cublasLtMatmulDescCreate(&matmulDesc, CUBLAS_COMPUTE_32F, CUDA_R_32F);
+
+    // Set the epilogue to include ReLU
+    cublasLtEpilogue_t epilogue = CUBLASLT_EPILOGUE_RELU;
+    cublasLtMatmulDescSetAttribute(matmulDesc,
+                                    CUBLASLT_MATMUL_DESC_EPILOGUE,
+                                    &epilogue,
+                                    sizeof(epilogue));
+
+    // Create matrix layouts
+    cublasLtMatrixLayout_t layoutA, layoutB, layoutC;
+    cublasLtMatrixLayoutCreate(&layoutA, CUDA_R_32F, (transA_ == CUBLAS_OP_N ? K : M), M, ldA);
+    cublasLtMatrixLayoutCreate(&layoutB, CUDA_R_32F, (transB_ == CUBLAS_OP_N ? N : K), K, ldB);
+    cublasLtMatrixLayoutCreate(&layoutC, CUDA_R_32F, N, M, ldC);
+
     if(args->batch == 1)
     {
         // cublas(handle, transA_, transB_, M, N, K, args->alpha, A, ldA, B, ldB,
         //         args->beta, C, M);
-        cublasSgemm(handle, transA_, transB_, M, N, K, &args->alpha, (const float *)A,
-            ldA, (const float *)B, ldB, &args->beta, (float *)C, ldC);
+        // cublasSgemm(handle, transA_, transB_, M, N, K, &args->alpha, (const float *)A,
+        //     ldA, (const float *)B, ldB, &args->beta, (float *)C, ldC);
+        cublasLtMatmul(ltHandle,
+                matmulDesc,
+                &args->alpha,    // Alpha
+                B, layoutB,      // Matrix B
+                A, layoutA,      // Matrix A
+                &args->beta,     // Beta
+                C, layoutC,      // Matrix C
+                C, layoutC,      // Output matrix
+                nullptr,         // Algorithm (nullptr for default)
+                nullptr,         // Workspace (nullptr for no extra memory)
+                0,               // Workspace size
+                stream);         // CUDA stream
     }
     else
     {
@@ -148,9 +184,27 @@ void cuda(void *buffers[], void *cl_args)
         // cublas_batch(handle, transA_, transB_, M, N, K, args->alpha, A, ldA,
         //         A_offset, B, ldB, B_offset, args->beta, C, M, C_offset,
         //         args->batch);
-        cublasSgemmStridedBatched(handle, transA_, transB_, M, N, K, &args->alpha,
-            (const float *)A, ldA, A_offset, (const float *)B, ldB, B_offset,
-            &args->beta, (float *)C, ldC, C_offset, args->batch);
+        // cublasSgemmStridedBatched(handle, transA_, transB_, M, N, K, &args->alpha,
+        //     (const float *)A, ldA, A_offset, (const float *)B, ldB, B_offset,
+        //     &args->beta, (float *)C, ldC, C_offset, args->batch);
+        for (int b = 0; b < args->batch; ++b) {
+            const T *A_b = A + b * A_offset;
+            const T *B_b = B + b * B_offset;
+            T *C_b = C + b * C_offset;
+
+            cublasLtMatmul(ltHandle,
+                        matmulDesc,
+                        &args->alpha,
+                        B_b, layoutB,
+                        A_b, layoutA,
+                        &args->beta,
+                        C_b, layoutC,
+                        C_b, layoutC,
+                        nullptr,
+                        nullptr,
+                        0,
+                        stream);
+        }
     }
 #endif // STARPU_SIMGRID
 }
