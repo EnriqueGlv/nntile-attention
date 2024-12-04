@@ -1,6 +1,7 @@
 #include "nntile/tensor/linear_relu.hh"
 #include "nntile/starpu/linear_relu.hh"
 #include "nntile/tensor/gemm.hh" // reuse gemm_check from nntile base gemm kernel
+#include "nntile/starpu/gemm.hh"
 
 namespace nntile::tensor{
 
@@ -64,7 +65,7 @@ void linear_relu_async(Scalar alpha, const TransOp &transA, const Tensor<T> &A,
                 Index C_tile_offset = (b*n+j)*m + i;
                 auto C_tile_handle = C.get_tile_handle(C_tile_offset);
                 auto C_tile_traits = C.get_tile_traits(C_tile_offset);
-                int C_tile_rank = C_tile_handle.mpi_get_rank();
+                // int C_tile_rank = C_tile_handle.mpi_get_rank();
                 Index tile_m = C_tile_traits.matrix_shape[
                     A.ndim-batch_ndim-ndim][0];
                 Index tile_batch = C_tile_traits.matrix_shape[
@@ -76,35 +77,40 @@ void linear_relu_async(Scalar alpha, const TransOp &transA, const Tensor<T> &A,
                 Index B_tile_offset = opB_stride[1]*j + b*n*k;
                 auto A_first_tile_handle = A.get_tile_handle(A_tile_offset);
                 auto B_first_tile_handle = B.get_tile_handle(B_tile_offset);
-                int A_first_tile_rank = A_first_tile_handle.mpi_get_rank();
-                int B_first_tile_rank = B_first_tile_handle.mpi_get_rank();
+                // int A_first_tile_rank = A_first_tile_handle.mpi_get_rank();
+                // int B_first_tile_rank = B_first_tile_handle.mpi_get_rank();
                 // Transfer first tile A on node with tile C
-                A_first_tile_handle.mpi_transfer(C_tile_rank, mpi_rank);
+                // A_first_tile_handle.mpi_transfer(C_tile_rank, mpi_rank);
                 // Transfer first tile B on node with tile C
-                B_first_tile_handle.mpi_transfer(C_tile_rank, mpi_rank);
+                // B_first_tile_handle.mpi_transfer(C_tile_rank, mpi_rank);
                 // Execute on node with tile C
-                if(mpi_rank == C_tile_rank)
-                {
-                    Index tile_k;
-                    auto A_first_tile_traits = A.get_tile_traits(
-                            A_tile_offset);
-                    switch(transA.value)
-                    {
-                        case TransOp::NoTrans:
-                            tile_k = A_first_tile_traits.matrix_shape[
-                                A.ndim-batch_ndim-ndim][1] / tile_batch;
-                            break;
-                            // This parameter was already checked
-                            //case TransOp::Trans:
-                        default:
-                            tile_k = A_first_tile_traits.matrix_shape[ndim][0];
-                            break;
-                    }
+                // if(mpi_rank == C_tile_rank)
+                // {
+                Index tile_k;
+                auto A_first_tile_traits = A.get_tile_traits(A_tile_offset);
+                switch(transA.value){
+                    case TransOp::NoTrans:
+                        tile_k = A_first_tile_traits.matrix_shape[
+                            A.ndim-batch_ndim-ndim][1] / tile_batch;
+                        break;
+                        // This parameter was already checked
+                        //case TransOp::Trans:
+                    default:
+                        tile_k = A_first_tile_traits.matrix_shape[ndim][0];
+                        break;
+                }
+                if(k==1){
                     starpu::linRelu::submit<T>(transA, transB, tile_m,
                             tile_n,
                             tile_k, tile_batch, alpha, A_first_tile_handle,
                             B_first_tile_handle, beta, C_tile_handle, redux);
+                } else {
+                    starpu::gemm::submit<T>(transA, transB, tile_m,
+                            tile_n,
+                            tile_k, tile_batch, alpha, A_first_tile_handle,
+                            B_first_tile_handle, beta, C_tile_handle, redux);
                 }
+                // }
                 // all other l>0
                 for(Index l = 1; l < k; ++l)
                 {
@@ -113,15 +119,15 @@ void linear_relu_async(Scalar alpha, const TransOp &transA, const Tensor<T> &A,
                     B_tile_offset += opB_stride[0];
                     auto A_tile_handle = A.get_tile_handle(A_tile_offset);
                     auto B_tile_handle = B.get_tile_handle(B_tile_offset);
-                    int A_tile_rank = A_tile_handle.mpi_get_rank();
-                    int B_tile_rank = B_tile_handle.mpi_get_rank();
+                    // int A_tile_rank = A_tile_handle.mpi_get_rank();
+                    // int B_tile_rank = B_tile_handle.mpi_get_rank();
                     // Transfer tile A on node with tile C
-                    A_tile_handle.mpi_transfer(C_tile_rank, mpi_rank);
+                    // A_tile_handle.mpi_transfer(C_tile_rank, mpi_rank);
                     // Transfer tile B on node with tile C
-                    B_tile_handle.mpi_transfer(C_tile_rank, mpi_rank);
+                    // B_tile_handle.mpi_transfer(C_tile_rank, mpi_rank);
                     // Execute on node with tile C
-                    if(mpi_rank == C_tile_rank)
-                    {
+                    // if(mpi_rank == C_tile_rank)
+                    // {
                         Index tile_k;
                         auto A_tile_traits = A.get_tile_traits(A_tile_offset);
                         switch(transA.value)
@@ -136,12 +142,22 @@ void linear_relu_async(Scalar alpha, const TransOp &transA, const Tensor<T> &A,
                                 tile_k = A_tile_traits.matrix_shape[ndim][0];
                                 break;
                         }
-                        starpu::linRelu::submit<T>(transA, transB, tile_m,
-                                tile_n,
-                                tile_k, tile_batch, alpha, A_tile_handle,
-                                B_tile_handle, one, C_tile_handle, redux);
-                    }
+                        // apply ReLU only on last GEMM
+                        if(l == k-1){
+                            starpu::linRelu::submit<T>(transA, transB, tile_m,
+                                    tile_n,
+                                    tile_k, tile_batch, alpha, A_tile_handle,
+                                    B_tile_handle, one, C_tile_handle, redux);
+                        } else {
+                            starpu::gemm::submit<T>(transA, transB, tile_m,
+                                    tile_n,
+                                    tile_k, tile_batch, alpha, A_tile_handle,
+                                    B_tile_handle, one, C_tile_handle, redux);
+                        }
+
+                    // }
                 }
+
                 // Flush cache for the output tile on every node
                 C_tile_handle.mpi_flush();
             }

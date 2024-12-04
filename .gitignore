@@ -2,3 +2,4 @@ build/
 .vscode
 __pycache__
 nntile.tar
+.editorconfig

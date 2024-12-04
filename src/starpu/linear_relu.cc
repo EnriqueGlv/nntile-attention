@@ -88,7 +88,6 @@ void cpu(void *buffers[], void *cl_args)
 }
 #endif // NNTILE_USE_CBLAS
 
-#define NNTILE_USE_CUDA
 #ifdef NNTILE_USE_CUDA
 //! GEMM for contiguous matrices without padding through StarPU buffers
 template<typename T>
@@ -133,12 +132,12 @@ void cuda(void *buffers[], void *cl_args)
             ldB = N;
     }
     // Get cuBLAS handle and CUDA stream
-    cublasHandle_t handle = starpu_cublas_get_local_handle();
-    cublasLtHandle_t ltHandle = (cublasLtHandle_t)handle;
+    // cublasHandle_t handle = starpu_cublas_get_local_handle();
+    cublasLtHandle_t ltHandle = (cublasLtHandle_t)starpu_cublas_get_local_handle();
     cudaStream_t stream = starpu_cuda_get_local_stream();
-    cublasSetStream(handle, stream);
+    cublasSetStream((cublasHandle_t)ltHandle, stream);
     // alpha and beta parameters of GEMM operation are on CPU host
-    cublasSetPointerMode(handle, CUBLAS_POINTER_MODE_HOST);
+    cublasSetPointerMode((cublasHandle_t)ltHandle, CUBLAS_POINTER_MODE_HOST);
 
     // Call corresponding cuBLAS routine
     // Create GEMM descriptor
@@ -152,11 +151,21 @@ void cuda(void *buffers[], void *cl_args)
                                     &epilogue,
                                     sizeof(epilogue));
 
+    // set transppose ops
+    cublasLtMatmulDescSetAttribute(matmulDesc, 
+                                    CUBLASLT_MATMUL_DESC_TRANSA, 
+                                    &transA_, 
+                                    sizeof(transA_));
+    cublasLtMatmulDescSetAttribute(matmulDesc, 
+                                    CUBLASLT_MATMUL_DESC_TRANSB, 
+                                    &transB_, 
+                                    sizeof(transB_));
+
     // Create matrix layouts
     cublasLtMatrixLayout_t layoutA, layoutB, layoutC;
-    cublasLtMatrixLayoutCreate(&layoutA, CUDA_R_32F, (transA_ == CUBLAS_OP_N ? K : M), M, ldA);
-    cublasLtMatrixLayoutCreate(&layoutB, CUDA_R_32F, (transB_ == CUBLAS_OP_N ? N : K), K, ldB);
-    cublasLtMatrixLayoutCreate(&layoutC, CUDA_R_32F, N, M, ldC);
+    cublasLtMatrixLayoutCreate(&layoutA, CUDA_R_32F, (transA_ == CUBLAS_OP_N) ? M : K, (transA_ == CUBLAS_OP_N) ? K : M, ldA);
+    cublasLtMatrixLayoutCreate(&layoutB, CUDA_R_32F, (transB_ == CUBLAS_OP_N) ? K : N, (transB_ == CUBLAS_OP_N) ? N : K, ldB);
+    cublasLtMatrixLayoutCreate(&layoutC, CUDA_R_32F, M, N, ldC);
 
     if(args->batch == 1)
     {
@@ -167,8 +176,8 @@ void cuda(void *buffers[], void *cl_args)
         cublasLtMatmul(ltHandle,
                 matmulDesc,
                 &args->alpha,    // Alpha
-                B, layoutB,      // Matrix B
                 A, layoutA,      // Matrix A
+                B, layoutB,      // Matrix B
                 &args->beta,     // Beta
                 C, layoutC,      // Matrix C
                 C, layoutC,      // Output matrix
@@ -195,8 +204,8 @@ void cuda(void *buffers[], void *cl_args)
             cublasLtMatmul(ltHandle,
                         matmulDesc,
                         &args->alpha,
-                        B_b, layoutB,
                         A_b, layoutA,
+                        B_b, layoutB,
                         &args->beta,
                         C_b, layoutC,
                         C_b, layoutC,

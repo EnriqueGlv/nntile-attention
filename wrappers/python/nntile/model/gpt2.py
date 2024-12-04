@@ -20,7 +20,7 @@ import nntile
 import nntile.utils.constructors as nntc
 from nntile.layer import (
     Act, AddSlice, Attention, AttentionSingleHead, Embedding, FlashAttention,
-    LayerNorm, Linear)
+    LayerNorm, Linear, LinearRelu)
 from nntile.layer.add import Add
 from nntile.layer.cache_utils import KVCache
 from nntile.model.base_model import BaseModel
@@ -87,25 +87,45 @@ class GPT2MLP(BaseModel):
         activation_function = config["activation_function"]
         redux = config["redux"]
         gemm_ndim = 1
-        # Initial linear layer that converts input to internal shape
-        new_layer, next_tag = Linear.generate_simple(
-            x,
-            "R",
-            notrans,
-            gemm_ndim,
-            [inner_dim],
-            [inner_dim_tile],
-            next_tag,
-            redux=redux,
-        )
-        layers.append(new_layer)
-        activations.extend(new_layer.activations_output)
+        
+        # Inria project
+        fuse_linRelu = config["fuse_linear_relu"]
 
-        new_layer, next_tag = Act.generate_simple(
-            activations[-1], activation_function, next_tag
-        )
-        layers.append(new_layer)
-        activations.extend(new_layer.activations_output)
+        # if activation is relu, fuse first linear layer with the following relu layer    
+        if fuse_linRelu and activation_function == "relu":
+            new_layer, next_tag = LinearRelu.generate_simple(
+                x,
+                "R",
+                notrans,
+                gemm_ndim,
+                [inner_dim],
+                [inner_dim_tile],
+                next_tag,
+                redux=redux,
+            )
+            layers.append(new_layer)
+            activations.extend(new_layer.activations_output)
+
+        else:
+            # Initial linear layer that converts input to internal shape
+            new_layer, next_tag = Linear.generate_simple(
+                x,
+                "R",
+                notrans,
+                gemm_ndim,
+                [inner_dim],
+                [inner_dim_tile],
+                next_tag,
+                redux=redux,
+            )
+            layers.append(new_layer)
+            activations.extend(new_layer.activations_output)
+
+            new_layer, next_tag = Act.generate_simple(
+                activations[-1], activation_function, next_tag
+            )
+            layers.append(new_layer)
+            activations.extend(new_layer.activations_output)
 
         new_layer, next_tag = Linear.generate_simple(
             activations[-1],
