@@ -22,7 +22,7 @@ namespace nntile::tensor{
 template<typename T>
 void linear_relu_async(Scalar alpha, const TransOp &transA, const Tensor<T> &A,
         const TransOp &transB, const Tensor<T> &B, Scalar beta,
-        const Tensor<T> &C, Index ndim, Index batch_ndim, int redux)
+        const Tensor<T> &C, Index ndim, Index batch_ndim, int redux, int act)
 {
     // Check inputs (throw exception in case of an error)
     gemm_check(transA, A, transB, B, C, ndim, batch_ndim);
@@ -103,7 +103,7 @@ void linear_relu_async(Scalar alpha, const TransOp &transA, const Tensor<T> &A,
                     starpu::linRelu::submit<T>(transA, transB, tile_m,
                             tile_n,
                             tile_k, tile_batch, alpha, A_first_tile_handle,
-                            B_first_tile_handle, beta, C_tile_handle, redux);
+                            B_first_tile_handle, beta, C_tile_handle, redux, act);
                 } else {
                     starpu::gemm::submit<T>(transA, transB, tile_m,
                             tile_n,
@@ -147,7 +147,7 @@ void linear_relu_async(Scalar alpha, const TransOp &transA, const Tensor<T> &A,
                             starpu::linRelu::submit<T>(transA, transB, tile_m,
                                     tile_n,
                                     tile_k, tile_batch, alpha, A_tile_handle,
-                                    B_tile_handle, one, C_tile_handle, redux);
+                                    B_tile_handle, one, C_tile_handle, redux, act);
                         } else {
                             starpu::gemm::submit<T>(transA, transB, tile_m,
                                     tile_n,
@@ -170,6 +170,6 @@ template
 void linear_relu_async<fp32_t>(Scalar alpha, const TransOp &transA,
         const Tensor<fp32_t> &A,
         const TransOp &transB, const Tensor<fp32_t> &B, Scalar beta,
-        const Tensor<fp32_t> &C, Index ndim, Index batch_ndim, int redux);
+        const Tensor<fp32_t> &C, Index ndim, Index batch_ndim, int redux, int act);
 
 }

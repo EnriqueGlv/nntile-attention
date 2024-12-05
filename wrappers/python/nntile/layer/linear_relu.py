@@ -32,6 +32,10 @@ class LinearRelu(BaseLayer):
     w: TensorMoments
     ndim: int
     b: Union[TensorMoments, None]
+    act_cublas = {
+        "relu": 2,
+        "gelutanh": 32,
+    }
 
     # Construct linear layer with all the provided data
     def __init__(self, side: str, trans_x: TransOp, x: TensorMoments,
@@ -40,7 +44,8 @@ class LinearRelu(BaseLayer):
             out_features_shape: List[int],
             out_features_basetile_shape: List[int],
             redux: bool = False,
-            batch_ndim: int = 0):
+            batch_ndim: int = 0,
+            act: str = "relu"):
         # Check parameter side
         if side != 'L' and side != 'R':
             raise ValueError("side must be either 'L' or 'R'")
@@ -73,6 +78,7 @@ class LinearRelu(BaseLayer):
             self.redux = 1
         else:
             self.redux = 0
+        self.act = self.act_cublas[act] if (act in self.act_cublas.keys()) else 0
 
     # Simple generator for the linear layer
     @staticmethod
@@ -81,7 +87,8 @@ class LinearRelu(BaseLayer):
             out_features_basetile_shape: List[int], next_tag: int,
             bias: bool = True,
             redux: bool = False,
-            batch_ndim: int = 0):
+            batch_ndim: int = 0,
+            act: str = "relu"):
         # Define shapes
         ndim = in_features_ndim
         add_shape = out_features_shape
@@ -158,7 +165,8 @@ class LinearRelu(BaseLayer):
             out_features_shape,
             out_features_basetile_shape,
             redux=redux,
-            batch_ndim=batch_ndim
+            batch_ndim=batch_ndim,
+            act=act
         )
         # Return layer and next tag to be used
         return (layer, next_tag)
@@ -173,7 +181,7 @@ class LinearRelu(BaseLayer):
             # 'k' is a multi-index of dimension W.ndim-ndim
             linear_relu_async(1.0, self.trans_x, self.x.value, notrans,
                         self.w.value, 0.0, self.y.value, self.ndim, self.batch_ndim,
-                        redux=self.redux)
+                        redux=self.redux, act=self.act)
             if self.b is not None:
                 add_fiber_inplace_async(1.0, self.b.value, 1.0, self.y.value,
                         self.y.value.ndim - 1, 0)
@@ -184,7 +192,7 @@ class LinearRelu(BaseLayer):
             # 'k' is a multi-index of dimension X.ndim-ndim
             linear_relu_async(1.0, notrans, self.w.value, self.trans_x,
                         self.x.value, 0.0, self.y.value, self.ndim, self.batch_ndim,
-                        redux=self.redux)
+                        redux=self.redux, act=self.act)
             if self.b is not None:
                 add_fiber_inplace_async(
                     1.0, self.b.value, 1.0, self.y.value, 0, 0
@@ -225,6 +233,7 @@ class LinearRelu(BaseLayer):
             self.ndim,
             self.batch_ndim,
             redux=self.redux,
+            act=self.act
         )
         if self.b is not None:
             add_fiber_inplace_async(1.0, self.b.value, 1.0, y, 0, 0)

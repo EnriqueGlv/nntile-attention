@@ -21,10 +21,6 @@
 #   include "nntile/kernel/gemm.hh"
 #endif
 
-#ifdef NNTILE_USE_CUDA
-#include <cublasLt.h>
-#endif
-
 namespace nntile::starpu::linRelu
 {
 
@@ -145,7 +141,7 @@ void cuda(void *buffers[], void *cl_args)
     cublasLtMatmulDescCreate(&matmulDesc, CUBLAS_COMPUTE_32F, CUDA_R_32F);
 
     // Set the epilogue to include ReLU
-    cublasLtEpilogue_t epilogue = CUBLASLT_EPILOGUE_RELU;
+    cublasLtEpilogue_t epilogue = args->act;//CUBLASLT_EPILOGUE_RELU;
     cublasLtMatmulDescSetAttribute(matmulDesc,
                                     CUBLASLT_MATMUL_DESC_EPILOGUE,
                                     &epilogue,
@@ -319,7 +315,7 @@ void restore_where(){
 template<typename T>
 void submit(const TransOp &transA, const TransOp &transB, Index m, Index n,
         Index k, Index batch, Scalar alpha, Handle A, Handle B, Scalar beta,
-        Handle C, int redux)
+        Handle C, int redux, int act)
 {
     // Check that matrix sizes fit proper types for underlying CBLAS
 #ifdef NNTILE_USE_CBLAS
@@ -387,7 +383,8 @@ void submit(const TransOp &transA, const TransOp &transB, Index m, Index n,
         .k = k,
         .batch = batch,
         .alpha = alpha,
-        .beta = beta
+        .beta = beta,
+        .act = static_cast<cublasLtEpilogue_t>(act)
     };
     double nflops = 2 * m * n * k * batch;
     // Submit task
@@ -409,6 +406,6 @@ void submit(const TransOp &transA, const TransOp &transB, Index m, Index n,
 template
 void submit<fp32_t>(const TransOp &transA, const TransOp &transB,
         Index m, Index n, Index k, Index batch, Scalar alpha, Handle A,
-        Handle B, Scalar beta, Handle C, int redux);
+        Handle B, Scalar beta, Handle C, int redux, int act);
 
 } // namespace nntile::starpu::gemm

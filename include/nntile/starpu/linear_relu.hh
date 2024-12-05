@@ -8,6 +8,7 @@
 #ifdef NNTILE_USE_CUDA
 #    include <cublas_v2.h>
 #    include <starpu_cublas_v2.h>
+#    include <cublasLt.h>
 //#    include <cuda_fp16.h>
 #endif // NNTILE_USE_CUDA
 
@@ -25,6 +26,7 @@ struct args_t
     Index batch; // Number of gemms in a batch
     Scalar alpha;
     Scalar beta;
+    cublasLtEpilogue_t act;
 };
 
 #ifdef NNTILE_USE_CBLAS
@@ -91,6 +93,6 @@ void restore_where();
 template<typename T>
 void submit(const TransOp &transA, const TransOp &transB, Index m, Index n,
         Index k, Index batch, Scalar alpha, Handle A, Handle B, Scalar beta,
-        Handle C, int redux=0);
+        Handle C, int redux=0, int act=1);
 
 } // namespace nntile::starpu::gemm

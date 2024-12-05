@@ -91,8 +91,8 @@ class GPT2MLP(BaseModel):
         # Inria project
         fuse_linRelu = config["fuse_linear_relu"]
 
-        # if activation is relu, fuse first linear layer with the following relu layer    
-        if fuse_linRelu and activation_function == "relu":
+        # fuse first linear layer with the following act layer    
+        if fuse_linRelu:
             new_layer, next_tag = LinearRelu.generate_simple(
                 x,
                 "R",
@@ -102,6 +102,7 @@ class GPT2MLP(BaseModel):
                 [inner_dim_tile],
                 next_tag,
                 redux=redux,
+                act=activation_function
             )
             layers.append(new_layer)
             activations.extend(new_layer.activations_output)

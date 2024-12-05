@@ -13,6 +13,6 @@ namespace nntile::tensor
 template<typename T>
 void linear_relu_async(Scalar alpha, const TransOp &transA, const Tensor<T> &A,
         const TransOp &transB, const Tensor<T> &B, Scalar beta,
-        const Tensor<T> &C, Index ndim, Index batch_ndim, int redux=0);
+        const Tensor<T> &C, Index ndim, Index batch_ndim, int redux=0, int act=1);
 
 } // namespace nntile::tensor
