@@ -99,6 +99,9 @@ void cuda(void *buffers[], void *cl_args)
     const T *A = interfaces[0]->get_ptr<T>();
     const T *B = interfaces[1]->get_ptr<T>();
     T *C = interfaces[2]->get_ptr<T>();
+    const T *BH; // bias handle
+    const bool bias = args->bias;
+    if(bias) BH = interfaces[3]->get_ptr<T>();
     // It is OK to convert values as it was checked during task submission
     int M=args->m, N=args->n, K=args->k, ldA, ldB, ldC=M;
     cublasOperation_t transA_, transB_;
@@ -141,11 +144,20 @@ void cuda(void *buffers[], void *cl_args)
     cublasLtMatmulDescCreate(&matmulDesc, CUBLAS_COMPUTE_32F, CUDA_R_32F);
 
     // Set the epilogue to include ReLU
-    cublasLtEpilogue_t epilogue = args->act;//CUBLASLT_EPILOGUE_RELU;
+    cublasLtEpilogue_t epilogue = args->act;
+    if(bias) epilogue = static_cast<cublasLtEpilogue_t>(epilogue | CUBLASLT_EPILOGUE_BIAS);
     cublasLtMatmulDescSetAttribute(matmulDesc,
                                     CUBLASLT_MATMUL_DESC_EPILOGUE,
                                     &epilogue,
                                     sizeof(epilogue));
+
+    // set bias input
+    if(bias){
+        cublasLtMatmulDescSetAttribute(matmulDesc,
+                                CUBLASLT_MATMUL_DESC_BIAS_POINTER,
+                                &BH,
+                                sizeof(BH));
+    }
 
     // set transppose ops
     cublasLtMatmulDescSetAttribute(matmulDesc, 
@@ -315,7 +327,7 @@ void restore_where(){
 template<typename T>
 void submit(const TransOp &transA, const TransOp &transB, Index m, Index n,
         Index k, Index batch, Scalar alpha, Handle A, Handle B, Scalar beta,
-        Handle C, int redux, int act)
+        Handle C, int redux, int act, bool bias, Handle BH)
 {
     // Check that matrix sizes fit proper types for underlying CBLAS
 #ifdef NNTILE_USE_CBLAS
@@ -384,7 +396,8 @@ void submit(const TransOp &transA, const TransOp &transB, Index m, Index n,
         .batch = batch,
         .alpha = alpha,
         .beta = beta,
-        .act = static_cast<cublasLtEpilogue_t>(act)
+        .act = static_cast<cublasLtEpilogue_t>(act),
+        .bias = bias
     };
     double nflops = 2 * m * n * k * batch;
     // Submit task
@@ -392,6 +405,7 @@ void submit(const TransOp &transA, const TransOp &transB, Index m, Index n,
             STARPU_R, static_cast<starpu_data_handle_t>(A),
             STARPU_R, static_cast<starpu_data_handle_t>(B),
             C_mode, static_cast<starpu_data_handle_t>(C),
+            STARPU_R, static_cast<starpu_data_handle_t>(BH),
             STARPU_CL_ARGS, args, sizeof(*args),
             STARPU_FLOPS, nflops,
             0);
@@ -406,6 +420,6 @@ void submit(const TransOp &transA, const TransOp &transB, Index m, Index n,
 template
 void submit<fp32_t>(const TransOp &transA, const TransOp &transB,
         Index m, Index n, Index k, Index batch, Scalar alpha, Handle A,
-        Handle B, Scalar beta, Handle C, int redux, int act);
+        Handle B, Scalar beta, Handle C, int redux, int act, bool bias, Handle BH);
 
 } // namespace nntile::starpu::gemm

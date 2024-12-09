@@ -2023,15 +2023,19 @@ def linear_relu_async(
     C: Tensor,
     ndim: int,
     batch_ndim: int,
+    BH: Tensor = None,
     redux: int = 0,
     act: int = 2,
+    bias: bool = False,
 ) -> None:
     """
     Wrapper for fp32 fused gemm+relu
     """
     if type(A) is not type(B) or type(A) is not type(C):
         raise TypeError
+    if bias and (type(A) is not type(BH)):
+        raise TypeError
     if type(A) is core_tensor.Tensor_fp32:
-        core_tensor.linear_relu_fwd_async_fp32(alpha, trans_A, A, trans_B, B, beta, C, ndim, batch_ndim, redux, act)
+        core_tensor.linear_relu_fwd_async_fp32(alpha, trans_A, A, trans_B, B, beta, C, ndim, batch_ndim, BH if bias else C, redux, act, bias)
     else:
         raise TypeError

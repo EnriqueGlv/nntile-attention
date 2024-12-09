@@ -182,7 +182,7 @@ class LinearRelu(BaseLayer):
             linear_relu_async(1.0, self.trans_x, self.x.value, notrans,
                         self.w.value, 0.0, self.y.value, self.ndim, self.batch_ndim,
                         redux=self.redux, act=self.act)
-            if self.b is not None:
+            if self.b is not None: # /!\ bias fusion not supported for left-hand matmul
                 add_fiber_inplace_async(1.0, self.b.value, 1.0, self.y.value,
                         self.y.value.ndim - 1, 0)
         else:
@@ -190,13 +190,19 @@ class LinearRelu(BaseLayer):
             # 'i' is a multi-index of dimension W.ndim-ndim
             # 'j' is a multi-index of dimension ndim
             # 'k' is a multi-index of dimension X.ndim-ndim
-            linear_relu_async(1.0, notrans, self.w.value, self.trans_x,
+
+            if self.b is not None:
+                linear_relu_async(1.0, notrans, self.w.value, self.trans_x,
+                        self.x.value, 0.0, self.y.value, self.ndim, self.batch_ndim,
+                        redux=self.redux, act=self.act, bias=True, BH=self.b.value)
+            else:
+                linear_relu_async(1.0, notrans, self.w.value, self.trans_x,
                         self.x.value, 0.0, self.y.value, self.ndim, self.batch_ndim,
                         redux=self.redux, act=self.act)
-            if self.b is not None:
-                add_fiber_inplace_async(
-                    1.0, self.b.value, 1.0, self.y.value, 0, 0
-                )
+            # if self.b is not None:
+            #     add_fiber_inplace_async(
+            #         1.0, self.b.value, 1.0, self.y.value, 0, 0
+            #     )
         # Hint for StarPU that W tensor will
         # not be used soon and it is advised to offload data from GPU
         self.w.value.wont_use()

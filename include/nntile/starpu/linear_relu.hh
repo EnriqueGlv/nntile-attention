@@ -27,6 +27,7 @@ struct args_t
     Scalar alpha;
     Scalar beta;
     cublasLtEpilogue_t act;
+    bool bias;
 };
 
 #ifdef NNTILE_USE_CBLAS
@@ -93,6 +94,6 @@ void restore_where();
 template<typename T>
 void submit(const TransOp &transA, const TransOp &transB, Index m, Index n,
         Index k, Index batch, Scalar alpha, Handle A, Handle B, Scalar beta,
-        Handle C, int redux=0, int act=1);
+        Handle C, int redux=0, int act=1, bool bias=false, Handle BH=nullptr);
 
 } // namespace nntile::starpu::gemm

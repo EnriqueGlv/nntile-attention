@@ -157,3 +157,120 @@ def test_linrelu_gelu(side: str, dtype: np.dtype, n_tiles: bool):
 
     A_moments.unregister()
     layer.unregister()
+
+
+@pytest.mark.parametrize('dtype', [np.float32])
+@pytest.mark.parametrize('n_tiles', [1, 2])
+def test_linrelu_bias(dtype: np.dtype, n_tiles: bool):
+    # Describe single-tile tensor, located at node 0
+    A_shape = [4, 6, 8]
+    A_tiles = [int(s/n_tiles) for s in A_shape]
+    A_traits = nntile.tensor.TensorTraits(A_shape, A_tiles)
+    mpi_distr = [0]*A_traits.grid.nelems
+    next_tag = 0
+    # Tensor objects
+    A = Tensor[dtype](A_traits, mpi_distr, next_tag)
+    next_tag = A.next_tag
+    A_grad = Tensor[dtype](A_traits, mpi_distr, next_tag)
+    next_tag = A_grad.next_tag
+    # Set initial values of tensors
+    rng = np.random.default_rng(42)
+    rand_A = rng.standard_normal(A_shape)
+    np_A = np.array(rand_A, dtype=dtype, order='F')
+    A_moments = nntile.tensor.TensorMoments(A, A_grad, True)
+    # Define linear layer
+    layer, next_tag = LinearRelu.generate_simple(
+        A_moments, "R", nntile.tensor.notrans, 1, [7], [7], next_tag,
+        bias=True, batch_ndim=0, act="relu")
+
+    # init weights matrix
+    rand_W = rng.standard_normal(layer.w.value.shape)
+    np_W = np.array(rand_W, dtype=dtype, order='F')
+    layer.w.value.from_array(np_W)
+    nntile.tensor.clear_async(layer.w.grad)
+
+     # init bias matrix
+    rand_B = rng.standard_normal(layer.b.value.shape)
+    np_B = np.array(rand_B, dtype=dtype, order='F')
+    layer.b.value.from_array(np_B)
+    nntile.tensor.clear_async(layer.b.grad)
+
+    # Check result of forward pass layer.y.value
+    A.from_array(np_A)
+    nntile.tensor.clear_async(A_grad)
+    layer.forward_async()
+    nntile.starpu.wait_for_all()
+
+    np_Y = np.tensordot(np_W, np_A, 1)
+    np_Y += np_B[:,np.newaxis,np.newaxis]
+    np_Y = F.relu(torch.from_numpy(np_Y)).numpy()
+
+    np_Y2 = np.zeros_like(np_Y, order='F')
+    layer.y.value.to_array(np_Y2)
+
+    # print("np:", np_Y[0])
+    # print("nntile:", np_Y2[0])
+    # print("bias:", np_B)
+
+    assert np.linalg.norm(np_Y - np_Y2) / np.linalg.norm(np_Y) <= 1e-5
+
+    A_moments.unregister()
+    layer.unregister()
+
+@pytest.mark.parametrize('dtype', [np.float32])
+@pytest.mark.parametrize('n_tiles', [1, 2])
+def test_linrelu_gelutanh_bias(dtype: np.dtype, n_tiles: bool):
+    # Describe single-tile tensor, located at node 0
+    A_shape = [4, 6, 8]
+    A_tiles = [int(s/n_tiles) for s in A_shape]
+    A_traits = nntile.tensor.TensorTraits(A_shape, A_tiles)
+    mpi_distr = [0]*A_traits.grid.nelems
+    next_tag = 0
+    # Tensor objects
+    A = Tensor[dtype](A_traits, mpi_distr, next_tag)
+    next_tag = A.next_tag
+    A_grad = Tensor[dtype](A_traits, mpi_distr, next_tag)
+    next_tag = A_grad.next_tag
+    # Set initial values of tensors
+    rng = np.random.default_rng(42)
+    rand_A = rng.standard_normal(A_shape)
+    np_A = np.array(rand_A, dtype=dtype, order='F')
+    A_moments = nntile.tensor.TensorMoments(A, A_grad, True)
+    # Define linear layer
+    layer, next_tag = LinearRelu.generate_simple(
+        A_moments, "R", nntile.tensor.notrans, 1, [7], [7], next_tag,
+        bias=True, batch_ndim=0, act="gelutanh")
+
+    # init weights matrix
+    rand_W = rng.standard_normal(layer.w.value.shape)
+    np_W = np.array(rand_W, dtype=dtype, order='F')
+    layer.w.value.from_array(np_W)
+    nntile.tensor.clear_async(layer.w.grad)
+
+     # init bias matrix
+    rand_B = rng.standard_normal(layer.b.value.shape)
+    np_B = np.array(rand_B, dtype=dtype, order='F')
+    layer.b.value.from_array(np_B)
+    nntile.tensor.clear_async(layer.b.grad)
+
+    # Check result of forward pass layer.y.value
+    A.from_array(np_A)
+    nntile.tensor.clear_async(A_grad)
+    layer.forward_async()
+    nntile.starpu.wait_for_all()
+
+    np_Y = np.tensordot(np_W, np_A, 1)
+    np_Y += np_B[:,np.newaxis,np.newaxis]
+    np_Y = F.gelu(torch.from_numpy(np_Y), approximate="tanh").numpy()
+
+    np_Y2 = np.zeros_like(np_Y, order='F')
+    layer.y.value.to_array(np_Y2)
+
+    # print("np:", np_Y[0])
+    # print("nntile:", np_Y2[0])
+    # print("bias:", np_B)
+
+    assert np.linalg.norm(np_Y - np_Y2) / np.linalg.norm(np_Y) <= 1e-5
+
+    A_moments.unregister()
+    layer.unregister()
