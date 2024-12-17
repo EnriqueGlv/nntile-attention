@@ -78,7 +78,7 @@ class LinearRelu(BaseLayer):
             self.redux = 1
         else:
             self.redux = 0
-        self.act = self.act_cublas[act] if (act in self.act_cublas.keys()) else 0
+        self.act = self.act_cublas[act] if (act in self.act_cublas.keys()) else 1
 
     # Simple generator for the linear layer
     @staticmethod

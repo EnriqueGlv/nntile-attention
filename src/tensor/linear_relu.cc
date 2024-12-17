@@ -63,14 +63,15 @@ template<typename T>
 void linear_relu_async(Scalar alpha, const TransOp &transA, const Tensor<T> &A,
         const TransOp &transB, const Tensor<T> &B, Scalar beta,
         const Tensor<T> &C, Index ndim, Index batch_ndim, 
-        const Tensor<T> &BH, int redux, int act, bool bias)
+        const Tensor<T> &BH, int redux, int act, bool bias,
+        const Tensor<T> &D, int reshape_ndim)
 {
     // Check inputs (throw exception in case of an error)
     gemm_check(transA, A, transB, B, C, ndim, batch_ndim);
     // bias check
-    // bias_check(BH,C,0,0);
+    if(bias) bias_check(BH,C,0,0);
+    
     // Sizes of A, B and C as simple matrices (grids of tiles) for gemm
-    int mpi_rank = starpu_mpi_world_rank();
     int ret;
     constexpr Scalar one = 1;
     Index m = C.grid.matrix_shape[A.ndim-batch_ndim-ndim][0];
@@ -98,17 +99,42 @@ void linear_relu_async(Scalar alpha, const TransOp &transA, const Tensor<T> &A,
             opB_stride = {n, 1};
             break;
     }
+    // tiling setup for post-gemm reshape
+    bool do_reshape = (reshape_ndim > 0);
+    Index r_grid_m=0, r_grid_n=0;
+    if(do_reshape){ // C has "src" shape
+        r_grid_m = C.grid.matrix_shape[reshape_ndim][0];
+        r_grid_n = C.grid.matrix_shape[reshape_ndim][1];
+    }
     // All per-tile starpu gemm calls shall appear here
     for(Index b = 0; b < batch; ++b){
         for(Index j = 0; j < n; ++j){
             for(Index i = 0; i < m; ++i){
+                               
                 Index C_tile_offset = (b*n+j)*m + i;
+
                 auto C_tile_handle = C.get_tile_handle(C_tile_offset);
                 auto C_tile_traits = C.get_tile_traits(C_tile_offset);
 
-                auto BH_tile_handle = BH.get_tile_handle(i);
-                // auto BH_tile_traits = ;
+                // select bias tile
+                starpu::Handle BH_tile_handle = (bias)? BH.get_tile_handle(i) : starpu::Handle();
 
+                // select dst tile for post-gemm reshape 
+                starpu::Handle D_tile_handle;
+                if(do_reshape){
+                    int ii = C_tile_offset % r_grid_m;
+                    int jj = C_tile_offset / r_grid_m;
+                    Index D_tile_offset = ii * r_grid_n + jj;
+                    D_tile_handle = D.get_tile_handle(D_tile_offset);
+                } else D_tile_handle = starpu::Handle();
+
+                // select size for reshaped tile
+                Index r_m, r_n;
+                if(do_reshape){
+                    r_m = C_tile_traits.matrix_shape[reshape_ndim][0];
+                    r_n = C_tile_traits.matrix_shape[reshape_ndim][1];
+                }
+                
                 Index tile_m = C_tile_traits.matrix_shape[
                     A.ndim-batch_ndim-ndim][0];
                 Index tile_batch = C_tile_traits.matrix_shape[
@@ -139,7 +165,9 @@ void linear_relu_async(Scalar alpha, const TransOp &transA, const Tensor<T> &A,
                     starpu::linRelu::submit<T>(transA, transB, tile_m,
                             tile_n,
                             tile_k, tile_batch, alpha, A_first_tile_handle,
-                            B_first_tile_handle, beta, C_tile_handle, redux, act, bias, BH_tile_handle);
+                            B_first_tile_handle, beta, C_tile_handle, redux, 
+                            act, bias, BH_tile_handle,
+                            do_reshape, r_m, r_n, D_tile_handle);
                 } else {
                     starpu::gemm::submit<T>(transA, transB, tile_m,
                             tile_n,
@@ -173,7 +201,9 @@ void linear_relu_async(Scalar alpha, const TransOp &transA, const Tensor<T> &A,
                         starpu::linRelu::submit<T>(transA, transB, tile_m,
                                 tile_n,
                                 tile_k, tile_batch, alpha, A_tile_handle,
-                                B_tile_handle, one, C_tile_handle, redux, act, bias, BH_tile_handle);
+                                B_tile_handle, one, C_tile_handle, redux,
+                                act, bias, BH_tile_handle, 
+                                do_reshape, r_m, r_n, D_tile_handle);
                     } else {
                         starpu::gemm::submit<T>(transA, transB, tile_m,
                                 tile_n,
@@ -185,6 +215,7 @@ void linear_relu_async(Scalar alpha, const TransOp &transA, const Tensor<T> &A,
 
                 // Flush cache for the output tile on every node
                 C_tile_handle.mpi_flush();
+                // D_tile_handle.mpi_flush();
             }
         }
     }
@@ -196,6 +227,7 @@ void linear_relu_async<fp32_t>(Scalar alpha, const TransOp &transA,
         const Tensor<fp32_t> &A,
         const TransOp &transB, const Tensor<fp32_t> &B, Scalar beta,
         const Tensor<fp32_t> &C, Index ndim, Index batch_ndim, 
-        const Tensor<fp32_t> &BH, int redux, int act, bool bias);
+        const Tensor<fp32_t> &BH, int redux, int act, bool bias,
+        const Tensor<fp32_t> &D, int reshape_ndim);
 
 }

@@ -12,6 +12,10 @@
 //#    include <cuda_fp16.h>
 #endif // NNTILE_USE_CUDA
 
+// debug macros
+#define D(x) std::cout << (x) << std::endl;
+#define Dn(x) std::cout << #x"= " << (x) << std::endl;
+
 namespace nntile::starpu::linRelu
 {
 
@@ -28,6 +32,9 @@ struct args_t
     Scalar beta;
     cublasLtEpilogue_t act;
     bool bias;
+    bool do_reshape;
+    Index reshape_m;
+    Index reshape_n;
 };
 
 #ifdef NNTILE_USE_CBLAS
@@ -94,6 +101,7 @@ void restore_where();
 template<typename T>
 void submit(const TransOp &transA, const TransOp &transB, Index m, Index n,
         Index k, Index batch, Scalar alpha, Handle A, Handle B, Scalar beta,
-        Handle C, int redux=0, int act=1, bool bias=false, Handle BH=nullptr);
+        Handle C, int redux, int act, bool bias, Handle BH, 
+        bool do_reshape, Index reshape_m, Index reshape_n, Handle D);
 
 } // namespace nntile::starpu::gemm

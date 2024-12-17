@@ -18,6 +18,7 @@
 
 // keep gemm kernel for cblas
 #ifndef STARPU_SIMGRID
+#   include "nntile/kernel/transpose.hh"
 #   include "nntile/kernel/gemm.hh"
 #endif
 
@@ -26,6 +27,7 @@ namespace nntile::starpu::linRelu
 
 // using namespace nntile::kernel::gemm;
 
+// for now on cpu kernel does just perform a dummy gemm
 #ifdef NNTILE_USE_CBLAS
 //! GEMM for contiguous matrices without padding through StarPU buffers
 template<typename T>
@@ -99,9 +101,19 @@ void cuda(void *buffers[], void *cl_args)
     const T *A = interfaces[0]->get_ptr<T>();
     const T *B = interfaces[1]->get_ptr<T>();
     T *C = interfaces[2]->get_ptr<T>();
+    // Bias init
     const T *BH; // bias handle
     const bool bias = args->bias;
     if(bias) BH = interfaces[3]->get_ptr<T>();
+    // reshape init
+    const bool do_reshape = args->do_reshape;
+    int r_m = args->reshape_m, r_n = args->reshape_n;
+    T *D; // reshape result handle
+    if(do_reshape){
+        if(bias) D = interfaces[4]->get_ptr<T>();
+        else D = interfaces[3]->get_ptr<T>();
+    } 
+    // Dn(D == interfaces[3]->get_ptr<T>())
     // It is OK to convert values as it was checked during task submission
     int M=args->m, N=args->n, K=args->k, ldA, ldB, ldC=M;
     cublasOperation_t transA_, transB_;
@@ -170,10 +182,17 @@ void cuda(void *buffers[], void *cl_args)
                                     sizeof(transB_));
 
     // Create matrix layouts
-    cublasLtMatrixLayout_t layoutA, layoutB, layoutC;
+    cublasLtMatrixLayout_t layoutA, layoutB, layoutC;//, layoutD;
     cublasLtMatrixLayoutCreate(&layoutA, CUDA_R_32F, (transA_ == CUBLAS_OP_N) ? M : K, (transA_ == CUBLAS_OP_N) ? K : M, ldA);
     cublasLtMatrixLayoutCreate(&layoutB, CUDA_R_32F, (transB_ == CUBLAS_OP_N) ? K : N, (transB_ == CUBLAS_OP_N) ? N : K, ldB);
     cublasLtMatrixLayoutCreate(&layoutC, CUDA_R_32F, M, N, ldC);
+    // cublasLtMatrixLayoutCreate(&layoutD, CUDA_R_32F, M, N, ldC);
+    
+    // init different output matrix if reshape needed
+    // if(!do_reshape) D = C;
+    // T* D;
+    // if(do_reshape) cudaMalloc(&D, M * N * sizeof(T));
+    // else D = C;
 
     if(args->batch == 1)
     {
@@ -193,9 +212,8 @@ void cuda(void *buffers[], void *cl_args)
                 nullptr,         // Workspace (nullptr for no extra memory)
                 0,               // Workspace size
                 stream);         // CUDA stream
-    }
-    else
-    {
+    
+    } else {
         Index A_offset = args->m * args->k, B_offset = args->n * args->k,
                 C_offset = args->m * args->n;
         // cublas_batch(handle, transA_, transB_, M, N, K, args->alpha, A, ldA,
@@ -207,7 +225,9 @@ void cuda(void *buffers[], void *cl_args)
         for (int b = 0; b < args->batch; ++b) {
             const T *A_b = A + b * A_offset;
             const T *B_b = B + b * B_offset;
+            
             T *C_b = C + b * C_offset;
+            // T *D_b = D + b * C_offset;
 
             cublasLtMatmul(ltHandle,
                         matmulDesc,
@@ -222,6 +242,12 @@ void cuda(void *buffers[], void *cl_args)
                         0,
                         stream);
         }
+    }
+
+    // compute post-gemm reshape if needed
+    if(do_reshape){
+        // cudaStream_t stream = starpu_cuda_get_local_stream();
+        kernel::transpose::cuda<T>(stream, r_m, r_n, 1.0, C, D);
     }
 #endif // STARPU_SIMGRID
 }
@@ -327,7 +353,8 @@ void restore_where(){
 template<typename T>
 void submit(const TransOp &transA, const TransOp &transB, Index m, Index n,
         Index k, Index batch, Scalar alpha, Handle A, Handle B, Scalar beta,
-        Handle C, int redux, int act, bool bias, Handle BH)
+        Handle C, int redux, int act, bool bias, Handle BH,
+        bool do_reshape, Index reshape_m, Index reshape_n, Handle D)
 {
     // Check that matrix sizes fit proper types for underlying CBLAS
 #ifdef NNTILE_USE_CBLAS
@@ -397,18 +424,54 @@ void submit(const TransOp &transA, const TransOp &transB, Index m, Index n,
         .alpha = alpha,
         .beta = beta,
         .act = static_cast<cublasLtEpilogue_t>(act),
-        .bias = bias
+        .bias = bias,
+        .do_reshape = do_reshape,
+        .reshape_m = reshape_m,
+        .reshape_n = reshape_n
     };
     double nflops = 2 * m * n * k * batch;
     // Submit task
-    int ret = starpu_task_insert(codelet<T>(transA, transB),
-            STARPU_R, static_cast<starpu_data_handle_t>(A),
-            STARPU_R, static_cast<starpu_data_handle_t>(B),
-            C_mode, static_cast<starpu_data_handle_t>(C),
-            STARPU_R, static_cast<starpu_data_handle_t>(BH),
-            STARPU_CL_ARGS, args, sizeof(*args),
-            STARPU_FLOPS, nflops,
-            0);
+
+    int ret=0;
+
+    if(do_reshape && bias){
+        ret = starpu_task_insert(codelet<T>(transA, transB),
+                STARPU_R, static_cast<starpu_data_handle_t>(A),
+                STARPU_R, static_cast<starpu_data_handle_t>(B),
+                STARPU_RW, static_cast<starpu_data_handle_t>(C),
+                STARPU_R, static_cast<starpu_data_handle_t>(BH),
+                STARPU_RW, static_cast<starpu_data_handle_t>(D),
+                STARPU_CL_ARGS, args, sizeof(*args),
+                STARPU_FLOPS, nflops,
+                0);
+    } else if (bias) {
+        ret = starpu_task_insert(codelet<T>(transA, transB),
+                STARPU_R, static_cast<starpu_data_handle_t>(A),
+                STARPU_R, static_cast<starpu_data_handle_t>(B),
+                C_mode, static_cast<starpu_data_handle_t>(C),
+                STARPU_R, static_cast<starpu_data_handle_t>(BH),
+                STARPU_CL_ARGS, args, sizeof(*args),
+                STARPU_FLOPS, nflops,
+                0);
+    } else if (do_reshape) {
+        ret = starpu_task_insert(codelet<T>(transA, transB),
+                STARPU_R, static_cast<starpu_data_handle_t>(A),
+                STARPU_R, static_cast<starpu_data_handle_t>(B),
+                STARPU_RW, static_cast<starpu_data_handle_t>(C),
+                STARPU_RW, static_cast<starpu_data_handle_t>(D),
+                STARPU_CL_ARGS, args, sizeof(*args),
+                STARPU_FLOPS, nflops,
+                0);
+    } else {
+        ret = starpu_task_insert(codelet<T>(transA, transB),
+                STARPU_R, static_cast<starpu_data_handle_t>(A),
+                STARPU_R, static_cast<starpu_data_handle_t>(B),
+                C_mode, static_cast<starpu_data_handle_t>(C),
+                STARPU_CL_ARGS, args, sizeof(*args),
+                STARPU_FLOPS, nflops,
+                0);
+    }
+
     // Check submission
     if(ret != 0)
     {
@@ -420,6 +483,7 @@ void submit(const TransOp &transA, const TransOp &transB, Index m, Index n,
 template
 void submit<fp32_t>(const TransOp &transA, const TransOp &transB,
         Index m, Index n, Index k, Index batch, Scalar alpha, Handle A,
-        Handle B, Scalar beta, Handle C, int redux, int act, bool bias, Handle BH);
+        Handle B, Scalar beta, Handle C, int redux, int act, bool bias, Handle BH,
+        bool do_reshape, Index reshape_m, Index reshape_n, Handle D);
 
 } // namespace nntile::starpu::gemm

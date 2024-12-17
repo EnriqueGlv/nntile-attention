@@ -24,7 +24,7 @@ class GPT2ConfigNNTile:
     intermediate_size_tile: int
     n_head: int
     n_head_tile: int
-    activation_function: str = "relu"# "gelutanh"
+    activation_function: str = "gelutanh" # "relu" also supported by fusion
     dtype: str = "fp32"
     flashattention: bool = False
     layer_norm_epsilon: float = 1e-5
@@ -33,3 +33,4 @@ class GPT2ConfigNNTile:
     redux: bool = True
     eos_token_id: int = 50256
     fuse_linear_relu: bool = False
+    # fuse_linear_reshape: bool = False

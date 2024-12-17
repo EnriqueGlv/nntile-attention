@@ -14,6 +14,7 @@ template<typename T>
 void linear_relu_async(Scalar alpha, const TransOp &transA, const Tensor<T> &A,
         const TransOp &transB, const Tensor<T> &B, Scalar beta,
         const Tensor<T> &C, Index ndim, Index batch_ndim, 
-        const Tensor<T> &BH, int redux, int act=1, bool bias=false);
+        const Tensor<T> &BH, int redux, int act, bool bias,
+        const Tensor<T> &D, int reshape_ndim);
 
 } // namespace nntile::tensor
