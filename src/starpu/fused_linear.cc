@@ -12,7 +12,7 @@
  * @version 1.1.0
  * */
 
-#include "nntile/starpu/linear_relu.hh"
+#include "nntile/starpu/fused_linear.hh"
 
 
 
@@ -22,7 +22,7 @@
 #   include "nntile/kernel/gemm.hh"
 #endif
 
-namespace nntile::starpu::linRelu
+namespace nntile::starpu::fusedLinear
 {
 
 // using namespace nntile::kernel::gemm;
@@ -279,7 +279,7 @@ Codelet codelet_NN_fp32,
 
 void init()
 {
-    codelet_NN_fp32.init("nntile_lin_relu_NN_fp32",
+    codelet_NN_fp32.init("nntile_fused_linear_NN_fp32",
             footprint,
 #ifdef NNTILE_USE_CBLAS
             {cpu<fp32_t>},
@@ -293,7 +293,7 @@ void init()
 #endif // NNTILE_USE_CUDA
             );
 
-    codelet_NT_fp32.init("nntile_lin_relu_NT_fp32",
+    codelet_NT_fp32.init("nntile_fused_linear_NT_fp32",
             footprint,
 #ifdef NNTILE_USE_CBLAS
             {cpu<fp32_t>},
@@ -307,7 +307,7 @@ void init()
 #endif // NNTILE_USE_CUDA
             );
 
-    codelet_TN_fp32.init("nntile_lin_relu_TN_fp32",
+    codelet_TN_fp32.init("nntile_fused_linear_TN_fp32",
             footprint,
 #ifdef NNTILE_USE_CBLAS
             {cpu<fp32_t>},
@@ -321,7 +321,7 @@ void init()
 #endif // NNTILE_USE_CUDA
             );
 
-    codelet_TT_fp32.init("nntile_lin_relu_TT_fp32",
+    codelet_TT_fp32.init("nntile_fused_linear_TT_fp32",
             footprint,
 #ifdef NNTILE_USE_CBLAS
             {cpu<fp32_t>},
@@ -475,7 +475,7 @@ void submit(const TransOp &transA, const TransOp &transB, Index m, Index n,
     // Check submission
     if(ret != 0)
     {
-        throw std::runtime_error("Error in lin_relu task submission");
+        throw std::runtime_error("Error in fused_linear task submission");
     }
 }
 

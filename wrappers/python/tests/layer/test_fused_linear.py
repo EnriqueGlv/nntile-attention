@@ -19,8 +19,8 @@ import torch.nn.functional as F
 
 import nntile
 import nntile.utils.constructors as nntc
-from nntile.layer import LinearRelu
-from nntile.tensor import to_numpy, linear_relu_async, transpose_async
+from nntile.layer import FusedLinear
+from nntile.tensor import to_numpy, fused_linear_async, transpose_async
 
 # Define mapping between numpy and nntile types
 Tensor = {
@@ -36,7 +36,7 @@ nntile.starpu.restrict_cuda()
 @pytest.mark.parametrize('side', ['L', 'R'])
 # @pytest.mark.parametrize('n_batch', [0]) # Batch gemm untested for now on because not used in GPT
 @pytest.mark.parametrize('n_tiles', [1, 2])
-def test_linrelu_relu(side: str, dtype: np.dtype, n_tiles: bool):
+def test_fuslin_relu(side: str, dtype: np.dtype, n_tiles: bool):
     # Describe single-tile tensor, located at node 0
     A_shape = [4, 6, 8]
     A_tiles = [int(s/n_tiles) for s in A_shape]
@@ -54,7 +54,7 @@ def test_linrelu_relu(side: str, dtype: np.dtype, n_tiles: bool):
     np_A = np.array(rand_A, dtype=dtype, order='F')
     A_moments = nntile.tensor.TensorMoments(A, A_grad, True)
     # Define linear layer
-    layer, next_tag = LinearRelu.generate_simple(
+    layer, next_tag = FusedLinear.generate_simple(
         A_moments, side, nntile.tensor.notrans, 2, [7, 8], [7, 8], next_tag,
         bias=False, batch_ndim=0, act="relu")
     rand_W = rng.standard_normal(layer.w.value.shape)
@@ -113,7 +113,7 @@ def test_linrelu_relu(side: str, dtype: np.dtype, n_tiles: bool):
 @pytest.mark.parametrize('side', ['L', 'R'])
 # @pytest.mark.parametrize('n_batch', [0]) # Batch gemm untested for now on because not used in GPT
 @pytest.mark.parametrize('n_tiles', [1, 2])
-def test_linrelu_gelu(side: str, dtype: np.dtype, n_tiles: bool):
+def test_fuslin_gelu(side: str, dtype: np.dtype, n_tiles: bool):
     # Describe single-tile tensor, located at node 0
     A_shape = [4, 6, 8]
     A_tiles = [int(s/n_tiles) for s in A_shape]
@@ -131,7 +131,7 @@ def test_linrelu_gelu(side: str, dtype: np.dtype, n_tiles: bool):
     np_A = np.array(rand_A, dtype=dtype, order='F')
     A_moments = nntile.tensor.TensorMoments(A, A_grad, True)
     # Define linear layer
-    layer, next_tag = LinearRelu.generate_simple(
+    layer, next_tag = FusedLinear.generate_simple(
         A_moments, side, nntile.tensor.notrans, 2, [7, 8], [7, 8], next_tag,
         bias=False, batch_ndim=0, act="gelutanh")
     rand_W = rng.standard_normal(layer.w.value.shape)
@@ -164,7 +164,7 @@ def test_linrelu_gelu(side: str, dtype: np.dtype, n_tiles: bool):
 
 @pytest.mark.parametrize('dtype', [np.float32])
 @pytest.mark.parametrize('n_tiles', [1, 2])
-def test_linrelu_bias(dtype: np.dtype, n_tiles: bool):
+def test_fuslin_bias(dtype: np.dtype, n_tiles: bool):
     # Describe single-tile tensor, located at node 0
     A_shape = [4, 6, 8]
     A_tiles = [int(s/n_tiles) for s in A_shape]
@@ -182,7 +182,7 @@ def test_linrelu_bias(dtype: np.dtype, n_tiles: bool):
     np_A = np.array(rand_A, dtype=dtype, order='F')
     A_moments = nntile.tensor.TensorMoments(A, A_grad, True)
     # Define linear layer
-    layer, next_tag = LinearRelu.generate_simple(
+    layer, next_tag = FusedLinear.generate_simple(
         A_moments, "R", nntile.tensor.notrans, 1, [7], [7], next_tag,
         bias=True, batch_ndim=0, act="relu")
 
@@ -222,7 +222,7 @@ def test_linrelu_bias(dtype: np.dtype, n_tiles: bool):
 
 @pytest.mark.parametrize('dtype', [np.float32])
 @pytest.mark.parametrize('n_tiles', [1, 2])
-def test_linrelu_gelutanh_bias(dtype: np.dtype, n_tiles: bool):
+def test_fuslin_gelutanh_bias(dtype: np.dtype, n_tiles: bool):
     # Describe single-tile tensor, located at node 0
     A_shape = [4, 6, 8]
     A_tiles = [int(s/n_tiles) for s in A_shape]
@@ -240,7 +240,7 @@ def test_linrelu_gelutanh_bias(dtype: np.dtype, n_tiles: bool):
     np_A = np.array(rand_A, dtype=dtype, order='F')
     A_moments = nntile.tensor.TensorMoments(A, A_grad, True)
     # Define linear layer
-    layer, next_tag = LinearRelu.generate_simple(
+    layer, next_tag = FusedLinear.generate_simple(
         A_moments, "R", nntile.tensor.notrans, 1, [7], [7], next_tag,
         bias=True, batch_ndim=0, act="gelutanh")
 
@@ -281,7 +281,7 @@ def test_linrelu_gelutanh_bias(dtype: np.dtype, n_tiles: bool):
 
 @pytest.mark.parametrize('dtype', [np.float32])
 @pytest.mark.parametrize('n_tiles', [1, 2])
-def test_linrelu_reshape(dtype: np.dtype, n_tiles: bool):
+def test_fuslin_reshape(dtype: np.dtype, n_tiles: bool):
     # Describe single-tile tensor, located at node 0
     A_shape = [4, 6, 8]
     A_tiles = [int(s/n_tiles) for s in A_shape]
@@ -299,7 +299,7 @@ def test_linrelu_reshape(dtype: np.dtype, n_tiles: bool):
     np_A = np.array(rand_A, dtype=dtype, order='F')
     A_moments = nntile.tensor.TensorMoments(A, A_grad, True)
     # Define layer (only used for weights allocation)
-    layer, next_tag = LinearRelu.generate_simple(
+    layer, next_tag = FusedLinear.generate_simple(
         A_moments, "R", nntile.tensor.notrans, 1, [7], [7], next_tag,
         bias=True, batch_ndim=0, act="gelutanh")
 
@@ -329,7 +329,7 @@ def test_linrelu_reshape(dtype: np.dtype, n_tiles: bool):
     A.from_array(np_A)
     nntile.tensor.clear_async(A_grad)
     # layer.forward_async()
-    linear_relu_async(1.0, nntile.tensor.notrans, layer.w.value, layer.trans_x,
+    fused_linear_async(1.0, nntile.tensor.notrans, layer.w.value, layer.trans_x,
                         layer.x.value, 0.0, layer.y.value, layer.ndim, layer.batch_ndim,
                         redux=layer.redux, act=layer.act, D=Y, reshape_ndim=1)
     

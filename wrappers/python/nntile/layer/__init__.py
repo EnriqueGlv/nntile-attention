@@ -29,9 +29,9 @@ from .mixer import GAP, Mixer, MixerMlp
 from .prod import Prod
 from .rms_norm import RMSNorm
 # Inria project
-from .linear_relu import LinearRelu
+from .fused_linear import FusedLinear
 
 __all__ = ('Act', 'Add', 'AddSlice', 'Attention', 'AttentionSingleHead',
         'BaseLayer', 'BatchNorm2d', 'Conv2d', 'Embedding', 'FlashAttention',
         'GAP', 'LayerNorm', 'Linear', 'LlamaAttention', 'GPT2Attention',
-        'Mixer', 'MixerMlp', 'RMSNorm', 'Prod', 'LinearRelu')
+        'Mixer', 'MixerMlp', 'RMSNorm', 'Prod', 'FusedLinear')

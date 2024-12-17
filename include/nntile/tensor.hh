@@ -97,7 +97,7 @@
 #include <nntile/tensor/log_scalar.hh>
 
 // Inria project
-#include "nntile/tensor/linear_relu.hh"
+#include "nntile/tensor/fused_linear.hh"
 
 //! @namespace nntile::tensor
 /*! This namespace holds high-level routines for Tensor<T>

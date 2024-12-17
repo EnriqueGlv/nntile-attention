@@ -1,5 +1,5 @@
-#include "nntile/tensor/linear_relu.hh"
-#include "nntile/starpu/linear_relu.hh"
+#include "nntile/tensor/fused_linear.hh"
+#include "nntile/starpu/fused_linear.hh"
 #include "nntile/tensor/gemm.hh" // reuse gemm_check from nntile base gemm kernel
 #include "nntile/starpu/gemm.hh"
 
@@ -60,7 +60,7 @@ void bias_check(const TensorTraits &src, const TensorTraits &dst, Index axis, In
  * @param[in] redux: Whether or not to use STARPU_REDUX
  * */
 template<typename T>
-void linear_relu_async(Scalar alpha, const TransOp &transA, const Tensor<T> &A,
+void fused_linear_async(Scalar alpha, const TransOp &transA, const Tensor<T> &A,
         const TransOp &transB, const Tensor<T> &B, Scalar beta,
         const Tensor<T> &C, Index ndim, Index batch_ndim, 
         const Tensor<T> &BH, int redux, int act, bool bias,
@@ -162,7 +162,7 @@ void linear_relu_async(Scalar alpha, const TransOp &transA, const Tensor<T> &A,
                         break;
                 }
                 if(k==1){
-                    starpu::linRelu::submit<T>(transA, transB, tile_m,
+                    starpu::fusedLinear::submit<T>(transA, transB, tile_m,
                             tile_n,
                             tile_k, tile_batch, alpha, A_first_tile_handle,
                             B_first_tile_handle, beta, C_tile_handle, redux, 
@@ -198,7 +198,7 @@ void linear_relu_async(Scalar alpha, const TransOp &transA, const Tensor<T> &A,
                     }
                     // apply ReLU only on last GEMM
                     if(l == k-1){
-                        starpu::linRelu::submit<T>(transA, transB, tile_m,
+                        starpu::fusedLinear::submit<T>(transA, transB, tile_m,
                                 tile_n,
                                 tile_k, tile_batch, alpha, A_tile_handle,
                                 B_tile_handle, one, C_tile_handle, redux,
@@ -223,7 +223,7 @@ void linear_relu_async(Scalar alpha, const TransOp &transA, const Tensor<T> &A,
 
 // Explicit instantiation
 template
-void linear_relu_async<fp32_t>(Scalar alpha, const TransOp &transA,
+void fused_linear_async<fp32_t>(Scalar alpha, const TransOp &transA,
         const Tensor<fp32_t> &A,
         const TransOp &transB, const Tensor<fp32_t> &B, Scalar beta,
         const Tensor<fp32_t> &C, Index ndim, Index batch_ndim, 

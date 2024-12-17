@@ -20,11 +20,11 @@ import torch.nn as nn
 import nntile.utils.constructors as nntc
 from nntile.layer.base_layer import BaseLayer
 from nntile.tensor import (
-    TensorMoments, TensorTraits, TransOp, add_fiber_inplace_async, gemm_async, linear_relu_async,
+    TensorMoments, TensorTraits, TransOp, add_fiber_inplace_async, gemm_async, fused_linear_async,
     notrans, sum_fiber_async, to_numpy, trans)
 
 
-class LinearRelu(BaseLayer):
+class FusedLinear(BaseLayer):
     side: str
     trans_x: TransOp
     x: TensorMoments
@@ -154,7 +154,7 @@ class LinearRelu(BaseLayer):
         # Define Y as TensorMoments
         y = TensorMoments(y_value, y_grad, True)
         # Create linear layer with all the provided data
-        layer = LinearRelu(
+        layer = FusedLinear(
             side,
             trans_x,
             x,
@@ -179,7 +179,7 @@ class LinearRelu(BaseLayer):
             # 'i' is a multi-index of dimension X.ndim-ndim
             # 'j' is a multi-index of dimension ndim
             # 'k' is a multi-index of dimension W.ndim-ndim
-            linear_relu_async(1.0, self.trans_x, self.x.value, notrans,
+            fused_linear_async(1.0, self.trans_x, self.x.value, notrans,
                         self.w.value, 0.0, self.y.value, self.ndim, self.batch_ndim,
                         redux=self.redux, act=self.act)
             if self.b is not None: # /!\ bias fusion not supported for left-hand matmul
@@ -192,11 +192,11 @@ class LinearRelu(BaseLayer):
             # 'k' is a multi-index of dimension X.ndim-ndim
 
             if self.b is not None:
-                linear_relu_async(1.0, notrans, self.w.value, self.trans_x,
+                fused_linear_async(1.0, notrans, self.w.value, self.trans_x,
                         self.x.value, 0.0, self.y.value, self.ndim, self.batch_ndim,
                         redux=self.redux, act=self.act, bias=True, BH=self.b.value)
             else:
-                linear_relu_async(1.0, notrans, self.w.value, self.trans_x,
+                fused_linear_async(1.0, notrans, self.w.value, self.trans_x,
                         self.x.value, 0.0, self.y.value, self.ndim, self.batch_ndim,
                         redux=self.redux, act=self.act)
             # if self.b is not None:
@@ -228,7 +228,7 @@ class LinearRelu(BaseLayer):
         # 'i' is a multi-index of dimension W.ndim-ndim
         # 'j' is a multi-index of dimension ndim
         # 'k' is a multi-index of dimension X.ndim-ndim
-        linear_relu_async(
+        fused_linear_async(
             1.0,
             notrans,
             self.w.value,
@@ -368,7 +368,7 @@ class LinearRelu(BaseLayer):
     def from_torch(torch_linear, x, hidden_dim_tile, redux, next_tag):
         gemm_ndim = 1
         hidden_dim = torch_linear.weight.shape[0]
-        linear_nntile, next_tag = LinearRelu.generate_simple(
+        linear_nntile, next_tag = FusedLinear.generate_simple(
             x,
             "R",
             notrans,

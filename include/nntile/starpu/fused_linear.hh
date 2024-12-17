@@ -16,7 +16,7 @@
 #define D(x) std::cout << (x) << std::endl;
 #define Dn(x) std::cout << #x"= " << (x) << std::endl;
 
-namespace nntile::starpu::linRelu
+namespace nntile::starpu::fusedLinear
 {
 
 //! Structure for arguments

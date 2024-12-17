@@ -235,7 +235,7 @@ set(STARPU_SRC
     "starpu/norm_fiber.cc"
     "starpu/log_scalar.cc"
     # Inria project
-    "starpu/linear_relu.cc"
+    "starpu/fused_linear.cc"
     )
 
 set(TILE_SRC
@@ -380,7 +380,7 @@ set(TENSOR_SRC
     "tensor/norm_fiber.cc"
     "tensor/log_scalar.cc"
     # inria project
-    "tensor/linear_relu.cc"
+    "tensor/fused_linear.cc"
     )
 
 set(LAYER_SRC

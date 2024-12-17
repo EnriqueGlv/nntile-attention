@@ -97,7 +97,7 @@
 #include <nntile/starpu/log_scalar.hh>
 
 // Inria project
-#include "nntile/starpu/linear_relu.hh"
+#include "nntile/starpu/fused_linear.hh"
 
 //! @namespace nntile::starpu
 /*! This namespace holds StarPU wrappers
@@ -186,7 +186,7 @@ void init()
     rope_backward::init();
     log_scalar::init();
     // inria project
-    linRelu::init();
+    fusedLinear::init();
 }
 
 // Restrict StarPU codelets to certain computational units
@@ -270,7 +270,7 @@ void restrict_where(uint32_t where)
     rope_backward::restrict_where(where);
     log_scalar::restrict_where(where);
     // inria project
-    linRelu::restrict_where(where);
+    fusedLinear::restrict_where(where);
 }
 
 // Restore computational units for StarPU codelets
@@ -354,7 +354,7 @@ void restore_where()
     rope_backward::restore_where();
     log_scalar::restore_where();
     // inria project
-    linRelu::restore_where();
+    fusedLinear::restore_where();
 }
 
 } // namespace nntile::starpu

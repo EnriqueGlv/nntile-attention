@@ -20,7 +20,7 @@ import nntile
 import nntile.utils.constructors as nntc
 from nntile.layer import (
     Act, AddSlice, Attention, AttentionSingleHead, Embedding, FlashAttention,
-    LayerNorm, Linear, LinearRelu)
+    LayerNorm, Linear, FusedLinear)
 from nntile.layer.add import Add
 from nntile.layer.cache_utils import KVCache
 from nntile.model.base_model import BaseModel
@@ -93,7 +93,7 @@ class GPT2MLP(BaseModel):
 
         # fuse first linear layer with the following act layer    
         if fuse_linRelu:
-            new_layer, next_tag = LinearRelu.generate_simple(
+            new_layer, next_tag = FusedLinear.generate_simple(
                 x,
                 "R",
                 notrans,

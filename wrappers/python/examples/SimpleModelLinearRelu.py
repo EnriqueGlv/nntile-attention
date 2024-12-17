@@ -7,7 +7,7 @@ import time
 import nntile
 from nntile.layer.act import Act
 from nntile.layer.linear import Linear
-from nntile.layer.linear_relu import LinearRelu
+from wrappers.python.nntile.layer.fused_linear import FusedLinear
 from nntile.model.base_model import BaseModel
 from nntile.tensor import TensorMoments, notrans, to_numpy
 
@@ -78,7 +78,7 @@ class FusedNN(BaseModel):
         layers = []
 
         # LinearRelu layer
-        new_layer, next_tag = LinearRelu.generate_simple(x, side, notrans, ndim,
+        new_layer, next_tag = FusedLinear.generate_simple(x, side, notrans, ndim,
                 [add_shape], [add_basetile_shape], next_tag, bias)
         layers.append(new_layer)
         activations.extend(new_layer.activations_output)
