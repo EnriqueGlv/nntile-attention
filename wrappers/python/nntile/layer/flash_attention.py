@@ -16,7 +16,7 @@ import numpy as np
 from nntile.layer.base_layer import BaseLayer
 from nntile.tensor import (
     Tensor, TensorMoments, TensorTraits, add_fiber_inplace_async, clear_async,
-    flash_maxsumexp_async, flash_softmax_gemm_async,
+    flash_maxsumexp_async, flash_softmax_gemm_async, fused_linear_async,
     flash_softmax_gemm_backward_async, gemm_async, notrans, sum_fiber_async,
     trans, transpose_async)
 
@@ -50,6 +50,7 @@ class FlashAttention(BaseLayer):
     b_transposed: TensorMoments
     n_head: int
     head_size: int
+    fuse_reshape: bool
 
     # Construct attention layer with all the provided data
     def __init__(
@@ -79,6 +80,7 @@ class FlashAttention(BaseLayer):
         out_proj_bias: TensorMoments,
         mask=None,
         redux: bool = False,
+        fuse_reshape: bool = False
     ):
         assert w_q.value.shape[0] % w_q.value.basetile_shape[0] == 0
         qkv_bias_list = []
@@ -172,6 +174,7 @@ class FlashAttention(BaseLayer):
             self.redux = 1
         else:
             self.redux = 0
+        self.fuse_reshape = fuse_reshape
 
     # Simple generator for the linear layer
     @staticmethod
@@ -185,6 +188,7 @@ class FlashAttention(BaseLayer):
         bias=False,
         mask=None,
         redux: bool = False,
+        fuse_reshape: bool = False
     ):
         # Get sizes
         n_emb, n_seq, n_batch = x_q.value.shape
@@ -515,6 +519,7 @@ class FlashAttention(BaseLayer):
             out_proj_bias,
             mask,
             redux=redux,
+            fuse_reshape=fuse_reshape
         )
         # Return layer and next tag to be used
         return (layer, next_tag)
@@ -525,20 +530,35 @@ class FlashAttention(BaseLayer):
         # Q_transposed = einsum('jkl,lmn->jkmn', W_Q, X_Q)
         # gemm (n_head, head_size, n_emb) by (n_emb, n_seq, n_batch) into
         # (n_head, head_size, n_seq, n_batch)
-        gemm_async(
-            1.0,
-            notrans,
-            self.w_q.value,
-            notrans,
-            self.x_q.value,
-            0.0,
-            self.q_transposed.value,
-            1,
-            0,
-            redux=self.redux,
-        )
-        # Rotate axes into (head_size, n_seq, n_batch, n_head)
-        transpose_async(1.0, self.q_transposed.value, self.q.value, 1)
+        if self.fuse_reshape:
+            fused_linear_async(1.0,
+                notrans,
+                self.w_q.value,
+                notrans,
+                self.x_q.value,
+                0.0,
+                self.q_transposed.value,
+                1,
+                0,
+                redux=self.redux,
+                act=1, 
+                D=self.q.value, 
+                reshape_ndim=1)
+        else:
+            gemm_async(
+                1.0,
+                notrans,
+                self.w_q.value,
+                notrans,
+                self.x_q.value,
+                0.0,
+                self.q_transposed.value,
+                1,
+                0,
+                redux=self.redux,
+            )
+            # Rotate axes into (head_size, n_seq, n_batch, n_head)
+            transpose_async(1.0, self.q_transposed.value, self.q.value, 1)
         # X_Q and W_Q can be offloaded from GPU
         self.x_q.value.wont_use()
         self.w_q.value.wont_use()
@@ -555,20 +575,36 @@ class FlashAttention(BaseLayer):
         # K_transposed = einsum('jkl,lmn->jkmn', W_K, X_K)
         # gemm (n_head, head_size, n_emb) by (n_emb, n_seq, n_batch) into
         # (n_head, head_size, n_seq, n_batch)
-        gemm_async(
-            1.0,
-            notrans,
-            self.w_k.value,
-            notrans,
-            self.x_k.value,
-            0.0,
-            self.k_transposed.value,
-            1,
-            0,
-            redux=self.redux,
-        )
-        # Rotate axes into (head_size, n_seq, n_batch, n_head)
-        transpose_async(1.0, self.k_transposed.value, self.k.value, 1)
+        if self.fuse_reshape:
+            fused_linear_async(1.0,
+                notrans,
+                self.w_k.value,
+                notrans,
+                self.x_k.value,
+                0.0,
+                self.k_transposed.value,
+                1,
+                0,
+                redux=self.redux,
+                act=1, 
+                D=self.k.value, 
+                reshape_ndim=1)
+        else:
+            gemm_async(
+                1.0,
+                notrans,
+                self.w_k.value,
+                notrans,
+                self.x_k.value,
+                0.0,
+                self.k_transposed.value,
+                1,
+                0,
+                redux=self.redux,
+            )
+            # Rotate axes into (head_size, n_seq, n_batch, n_head)
+            transpose_async(1.0, self.k_transposed.value, self.k.value, 1)
+        
         # X_K and W_K can be offloaded from GPU
         self.x_k.value.wont_use()
         self.w_k.value.wont_use()
@@ -585,20 +621,36 @@ class FlashAttention(BaseLayer):
         # V_transposed = einsum('jkl,lmn->jkmn', W_V, X_V)
         # gemm (n_head, head_size, n_emb) by (n_emb, n_seq, n_batch) into
         # (n_head, head_size, n_seq, n_batch)
-        gemm_async(
-            1.0,
-            notrans,
-            self.w_v.value,
-            notrans,
-            self.x_v.value,
-            0.0,
-            self.v_transposed.value,
-            1,
-            0,
-            redux=self.redux,
-        )
-        # Rotate axes into (head_size, n_seq, n_batch, n_head)
-        transpose_async(1.0, self.v_transposed.value, self.v.value, 1)
+        if self.fuse_reshape:
+            fused_linear_async(1.0,
+                notrans,
+                self.w_v.value,
+                notrans,
+                self.x_v.value,
+                0.0,
+                self.v_transposed.value,
+                1,
+                0,
+                redux=self.redux,
+                act=1, 
+                D=self.v.value, 
+                reshape_ndim=1)
+        else:
+            gemm_async(
+                1.0,
+                notrans,
+                self.w_v.value,
+                notrans,
+                self.x_v.value,
+                0.0,
+                self.v_transposed.value,
+                1,
+                0,
+                redux=self.redux,
+            )
+            # Rotate axes into (head_size, n_seq, n_batch, n_head)
+            transpose_async(1.0, self.v_transposed.value, self.v.value, 1)
+        
         # X_V and W_V can be offloaded from GPU
         self.x_v.value.wont_use()
         self.w_v.value.wont_use()

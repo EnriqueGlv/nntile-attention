@@ -90,6 +90,7 @@ class GPT2MLP(BaseModel):
         
         # Inria project
         fuse_linRelu = config["fuse_linear_relu"]
+        fuse_linBias = config["fuse_linear_relu"]
 
         # fuse first linear layer with the following act layer    
         if fuse_linRelu:
@@ -118,6 +119,7 @@ class GPT2MLP(BaseModel):
                 [inner_dim_tile],
                 next_tag,
                 redux=redux,
+                fuse_bias=fuse_linBias
             )
             layers.append(new_layer)
             activations.extend(new_layer.activations_output)
@@ -137,6 +139,7 @@ class GPT2MLP(BaseModel):
             [embed_dim_tile],
             next_tag,
             redux=redux,
+            fuse_bias=fuse_linBias
         )
         layers.append(new_layer)
         activations.extend(new_layer.activations_output)
@@ -189,6 +192,10 @@ class GPT2Model(BaseModel, LLMGenerationMixin):
         redux = config["redux"]
         self.dtype = config["dtype"]
         self.eos_token_id = config["eos_token_id"]
+
+        # Inria project
+        fuse_linBias = config["fuse_linear_relu"]
+        fuse_linResh = config["fuse_linear_relu"]
 
         if self.dtype not in ["fp32", "tf32",
                               "bf16", "fp32_fast_fp16",
@@ -276,6 +283,20 @@ class GPT2Model(BaseModel, LLMGenerationMixin):
                     self.mask,
                     redux=redux,
                 )
+            # fuse linear and reshape is only supported for FlashAttention
+            elif flashattention:
+                attn_layer, next_tag = AttLayer.generate_simple(
+                    activations[-1],
+                    activations[-1],
+                    activations[-1],
+                    self.n_head,
+                    n_head_tile,
+                    next_tag,
+                    True,
+                    self.mask,
+                    redux=redux,
+                    fuse_reshape=fuse_linResh
+                )
             else:
                 attn_layer, next_tag = AttLayer.generate_simple(
                     activations[-1],
@@ -332,6 +353,7 @@ class GPT2Model(BaseModel, LLMGenerationMixin):
             next_tag,
             False,
             redux=redux,
+            fuse_bias=fuse_linBias
         )
 
         layers.append(lm_head_layer)

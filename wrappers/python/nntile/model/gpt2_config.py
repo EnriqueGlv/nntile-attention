@@ -32,5 +32,6 @@ class GPT2ConfigNNTile:
     num_hidden_layers: int = 1
     redux: bool = True
     eos_token_id: int = 50256
-    fuse_linear_relu: bool = False
-    # fuse_linear_reshape: bool = False
+    fuse_linear_relu: bool = False      # fuse linear + bias + reshape in GPT2MLP
+    fuse_linear_bias: bool = False      # fuse linear + bias in every linear layer
+    fuse_linear_reshape: bool = False   # fuse linear + bias + reshape in FlashAttention

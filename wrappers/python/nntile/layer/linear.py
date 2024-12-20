@@ -20,7 +20,7 @@ import torch.nn as nn
 import nntile.utils.constructors as nntc
 from nntile.layer.base_layer import BaseLayer
 from nntile.tensor import (
-    TensorMoments, TensorTraits, TransOp, add_fiber_inplace_async, gemm_async,
+    TensorMoments, TensorTraits, TransOp, add_fiber_inplace_async, gemm_async, fused_linear_async,
     notrans, sum_fiber_async, to_numpy, trans)
 
 
@@ -32,6 +32,7 @@ class Linear(BaseLayer):
     w: TensorMoments
     ndim: int
     b: Union[TensorMoments, None]
+    fuse_bias: bool
 
     # Construct linear layer with all the provided data
     def __init__(self, side: str, trans_x: TransOp, x: TensorMoments,
@@ -39,7 +40,8 @@ class Linear(BaseLayer):
             b: Union[TensorMoments, None],
             out_features_shape: List[int],
             out_features_basetile_shape: List[int],
-            redux: bool = False):
+            redux: bool = False,
+            fuse_bias: bool = False):
         # Check parameter side
         if side != 'L' and side != 'R':
             raise ValueError("side must be either 'L' or 'R'")
@@ -71,6 +73,8 @@ class Linear(BaseLayer):
             self.redux = 1
         else:
             self.redux = 0
+        # inria project
+        self.fuse_bias = fuse_bias 
 
     # Simple generator for the linear layer
     @staticmethod
@@ -78,7 +82,8 @@ class Linear(BaseLayer):
             in_features_ndim: int, out_features_shape: List[int],
             out_features_basetile_shape: List[int], next_tag: int,
             bias: bool = True,
-            redux: bool = False):
+            redux: bool = False,
+            fuse_bias: bool = False):
         # Define shapes
         ndim = in_features_ndim
         add_shape = out_features_shape
@@ -155,6 +160,7 @@ class Linear(BaseLayer):
             out_features_shape,
             out_features_basetile_shape,
             redux=redux,
+            fuse_bias=fuse_bias
         )
         # Return layer and next tag to be used
         return (layer, next_tag)
@@ -178,13 +184,20 @@ class Linear(BaseLayer):
             # 'i' is a multi-index of dimension W.ndim-ndim
             # 'j' is a multi-index of dimension ndim
             # 'k' is a multi-index of dimension X.ndim-ndim
-            gemm_async(1.0, notrans, self.w.value, self.trans_x,
-                        self.x.value, 0.0, self.y.value, self.ndim, 0,
-                        redux=self.redux)
-            if self.b is not None:
-                add_fiber_inplace_async(
-                    1.0, self.b.value, 1.0, self.y.value, 0, 0
-                )
+            if self.fuse_bias and (self.b is not None):
+                # inria project
+                # call fused linear with no activation and biases -> supported only for 'R' matrix 
+                fused_linear_async(1.0, notrans, self.w.value, self.trans_x,
+                        self.x.value, 0.0, self.y.value, self.ndim, self.batch_ndim,
+                        redux=self.redux, act=0, bias=True, BH=self.b.value)
+            else:
+                gemm_async(1.0, notrans, self.w.value, self.trans_x,
+                            self.x.value, 0.0, self.y.value, self.ndim, 0,
+                            redux=self.redux)
+                if self.b is not None:
+                    add_fiber_inplace_async(
+                        1.0, self.b.value, 1.0, self.y.value, 0, 0
+                    )
         # Hint for StarPU that W tensor will
         # not be used soon and it is advised to offload data from GPU
         self.w.value.wont_use()
