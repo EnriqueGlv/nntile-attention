@@ -50,6 +50,9 @@ class GPT2Config(Dict):
         use_redux: bool = False,
         dtype: str = "fp32",
         eos_token_id: int = 50256,
+        fuse_linear_relu: bool = False,      # fuse linear + bias + reshape in GPT2MLP
+        fuse_linear_bias: bool = False,      # fuse linear + bias in every linear layer
+        fuse_linear_reshape: bool = False,   # fuse linear + bias + reshape in FlashAttention
     ):
         self["vocab_size"] = vocab_size
         self["vocab_embed_dim_tile"] = vocab_embed_dim_tile
@@ -67,6 +70,10 @@ class GPT2Config(Dict):
         self["redux"] = use_redux
         self["dtype"] = dtype
         self["eos_token_id"] = eos_token_id
+        self["fuse_linear_relu"] = fuse_linear_relu
+        self["fuse_linear_bias"] = fuse_linear_bias
+        self["fuse_linear_reshape"] = fuse_linear_reshape
+
 
     def __getattr__(self, attr):
         return self[attr]
@@ -90,7 +97,7 @@ class GPT2MLP(BaseModel):
         
         # Inria project
         fuse_linRelu = config["fuse_linear_relu"]
-        fuse_linBias = config["fuse_linear_relu"]
+        fuse_linBias = config["fuse_linear_bias"]
 
         # fuse first linear layer with the following act layer    
         if fuse_linRelu:
@@ -194,8 +201,8 @@ class GPT2Model(BaseModel, LLMGenerationMixin):
         self.eos_token_id = config["eos_token_id"]
 
         # Inria project
-        fuse_linBias = config["fuse_linear_relu"]
-        fuse_linResh = config["fuse_linear_relu"]
+        fuse_linBias = config["fuse_linear_bias"]
+        fuse_linResh = config["fuse_linear_reshape"]
 
         if self.dtype not in ["fp32", "tf32",
                               "bf16", "fp32_fast_fp16",

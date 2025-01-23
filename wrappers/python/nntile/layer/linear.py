@@ -188,8 +188,8 @@ class Linear(BaseLayer):
                 # inria project
                 # call fused linear with no activation and biases -> supported only for 'R' matrix 
                 fused_linear_async(1.0, notrans, self.w.value, self.trans_x,
-                        self.x.value, 0.0, self.y.value, self.ndim, self.batch_ndim,
-                        redux=self.redux, act=0, bias=True, BH=self.b.value)
+                        self.x.value, 0.0, self.y.value, self.ndim, 0, BH=self.b.value,
+                        redux=self.redux, act=1, bias=True)
             else:
                 gemm_async(1.0, notrans, self.w.value, self.trans_x,
                             self.x.value, 0.0, self.y.value, self.ndim, 0,
