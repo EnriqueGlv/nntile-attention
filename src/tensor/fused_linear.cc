@@ -165,7 +165,7 @@ void fused_linear_async(Scalar alpha, const TransOp &transA, const Tensor<T> &A,
                     starpu::fusedLinear::submit<T>(transA, transB, tile_m,
                             tile_n,
                             tile_k, tile_batch, alpha, A_first_tile_handle,
-                            B_first_tile_handle, beta, C_tile_handle, redux, 
+                            B_first_tile_handle, beta, C_tile_handle, 0, 
                             act, bias, BH_tile_handle,
                             do_reshape, r_m, r_n, D_tile_handle);
                 } else {
@@ -201,7 +201,7 @@ void fused_linear_async(Scalar alpha, const TransOp &transA, const Tensor<T> &A,
                         starpu::fusedLinear::submit<T>(transA, transB, tile_m,
                                 tile_n,
                                 tile_k, tile_batch, alpha, A_tile_handle,
-                                B_tile_handle, one, C_tile_handle, redux,
+                                B_tile_handle, one, C_tile_handle, 0,
                                 act, bias, BH_tile_handle, 
                                 do_reshape, r_m, r_n, D_tile_handle);
                     } else {
